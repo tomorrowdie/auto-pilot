@@ -1,0 +1,12 @@
+[
+  {
+    "brand_name": "Angry Factory",
+    "vision_statement": "To forge legendary vessels that blend the enduring spirit of ancient craftsmanship with uncompromising modern functionality, empowering the bold to reclaim authenticity and robust enjoyment in every moment.",
+    "tone_of_voice": "The CEO speaks with a voice that is: \n\n*   **Powerful & Authoritative:** Confident in the brand's quality and vision, drawing strength from the 'Angry Factory' name to signify a passionate, unyielding commitment to excellence.\n*   **Evocative & Story-Driven:** Weaving narratives of heritage, adventure, and craftsmanship, rather than just listing features. Evoking the spirit of ancient sagas and robust tales.\n*   **Ruggedly Refined:** Acknowledging the raw, barbarian aesthetic while emphasizing the precision, thought, and superior engineering of the stainless steel integration. Not crude, but strong and purposeful.\n*   **Unwavering on Quality:** Direct, honest, and assured when discussing materials, durability, and the superior drinking experience. There's no room for doubt or compromise.\n*   **Non-Conformist:** Proudly distinct, challenging the blandness of mass-produced items and celebrating individuality and robust utility. Not 'angry' in a negative sense, but 'fiercely dedicated' and 'boldly independent'.",
+    "core_values": "Uncompromising Craftsmanship: We are fiercely dedicated to superior quality, forging each piece with meticulous attention and enduring materials., Legendary Durability: Our products are built to withstand the test of time, designed for generations of use, not fleeting trends., Authentic Fortitude: We celebrate the rugged spirit of history and myth, creating vessels that resonate with power and distinctive character., Functional Excellence: We seamlessly integrate ancient aesthetics with modern hygiene and performance, ensuring an unparalleled user experience., Rebellious Distinction: We stand apart from the ordinary, crafting artifacts for those who dare to embrace a unique, robust, and unapologetic identity.",
+    "forbidden_words": "Flimsy, Disposable, Delicate, Cheap, Mass-produced, Generic, Cute, Trendy, Fragile, Basic",
+    "id": 2,
+    "createdAt": "2025-12-24T03:41:14.315Z",
+    "updatedAt": "2025-12-24T03:41:14.315Z"
+  }
+]

@@ -1,0 +1,547 @@
+{
+  "name": "AnergyAcademy Bing GEO Strategy Engine",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -880,
+        -208
+      ],
+      "id": "bf6bf780-3b1a-473f-8a1d-1e5742bc89aa",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "content": "# Get Bing Keyword Query Report for 7 and 28 Days",
+        "height": 272,
+        "width": 928,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -400,
+        -448
+      ],
+      "typeVersion": 1,
+      "id": "588a0694-e990-492b-a158-fa4975378cb2",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "url": "https://ssl.bing.com/webmaster/api.svc/json/GetUserSites",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -672,
+        -208
+      ],
+      "id": "40d1a4e8-b3a3-484c-b245-14aeb9a8e53e",
+      "name": "Access Bing Webmaster",
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "2bnNAFZ7lrB8oca6",
+          "name": "Bing Webmaster - AnergyAcademy"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://ssl.bing.com/webmaster/api.svc/json/GetQueryStats",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "siteUrl",
+              "value": "={{ $json.d[0].Url }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -320,
+        -352
+      ],
+      "id": "25d03f48-4a67-40bf-ae79-1ecfd077c3b9",
+      "name": "Get Bing Search Query (keywords)",
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "2bnNAFZ7lrB8oca6",
+          "name": "Bing Webmaster - AnergyAcademy"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://ssl.bing.com/webmaster/api.svc/json/GetPageStats",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "siteUrl",
+              "value": "={{ $json.d[0].Url }}"
+            },
+            {
+              "name": "startDate",
+              "value": "={{$now.minus({days: 7}).toISODate()}}"
+            },
+            {
+              "name": "endDate",
+              "value": "={{$now.toISODate()}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -304,
+        -32
+      ],
+      "id": "45b3a52a-86e0-4472-96db-50b2c57d91a8",
+      "name": "Get Bing Page Search Query",
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "2bnNAFZ7lrB8oca6",
+          "name": "Bing Webmaster - AnergyAcademy"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Page Query Engine (Normalize Bing GetPageStats output)\n// Output: 1 item => { meta, rows[] }\n\nfunction bingDateToISO(bingDateStr) {\n  const m = String(bingDateStr).match(/\\/Date\\((\\d+)([+-]\\d{4})?\\)\\//);\n  if (!m) return null;\n  const ms = Number(m[1]);\n  return new Date(ms).toISOString().slice(0, 10);\n}\nfunction num(x){ return x === null || x === undefined || x === '' ? 0 : Number(x); }\n\nconst root = $input.first().json;\n\n// robust read: sometimes root is {d:[...]} or [{d:[...]}]\nconst raw = Array.isArray(root?.d) ? root.d\n        : Array.isArray(root?.[0]?.d) ? root[0].d\n        : [];\n\nconst rows = raw.map(r => ({\n  page: r.Url || r.URL || r.Page || r.page || r.url || null,\n  date: r.Date ? bingDateToISO(r.Date) : null,\n  clicks: num(r.Clicks),\n  impressions: num(r.Impressions),\n  avgImprPos: (r.AvgImpressionPosition === -1 ? null : (r.AvgImpressionPosition ?? null)),\n  avgClickPos: (r.AvgClickPosition === -1 ? null : (r.AvgClickPosition ?? null)),\n}));\n\nreturn [{\n  json: {\n    meta: { source: \"Bing GetPageStats\", generated_at: new Date().toISOString() },\n    rows\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -96,
+        -32
+      ],
+      "id": "4f9bd00e-478a-49d2-a601-08d227d4f37b",
+      "name": "Page Query Engine"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ENGINE — Query Stats + AI Signals\n// Input: Bing GetQueryStats response (usually { d: [...] } or [{ d: [...] }])\n// Output: one item with query_ranked_7d, query_ranked_28d, windows, debug, meta\n\nfunction bingDateToISO(bingDateStr) {\n  const m = String(bingDateStr).match(/\\/Date\\((\\d+)([+-]\\d{4})?\\)\\//);\n  if (!m) return null;\n  const ms = Number(m[1]);\n  return new Date(ms).toISOString().slice(0, 10);\n}\n\nfunction num(x){ return x === null || x === undefined || x === '' ? 0 : Number(x); }\nfunction clamp(n,a=0,b=100){ return Math.max(a, Math.min(b, n)); }\nfunction safeDiv(a,b){ return b ? a/b : 0; }\n\nfunction windowSplitCalendar(rows, windowDays) {\n  const now = new Date();\n  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())); // today 00:00Z\n\n  const startA = new Date(end); startA.setUTCDate(startA.getUTCDate() - windowDays);\n  const startB = new Date(end); startB.setUTCDate(startB.getUTCDate() - windowDays * 2);\n  const endB   = new Date(end); endB.setUTCDate(endB.getUTCDate() - windowDays);\n\n  const inRange = (d, s, e) => {\n    if (!d) return false;\n    const dt = new Date(d + \"T00:00:00Z\");\n    return dt >= s && dt < e;\n  };\n\n  return {\n    A: rows.filter(r => inRange(r.date, startA, end)),\n    B: rows.filter(r => inRange(r.date, startB, endB)),\n    window: {\n      A: { start: startA.toISOString().slice(0,10), end: end.toISOString().slice(0,10) },\n      B: { start: startB.toISOString().slice(0,10), end: endB.toISOString().slice(0,10) },\n    }\n  };\n}\n\nfunction groupByQuery(rows) {\n  const m = new Map();\n  for (const r of rows) {\n    const q = r.query;\n    if (!q) continue;\n\n    const cur = m.get(q) || {\n      key: q,\n      clicks: 0,\n      impressions: 0,\n      avgImprPos_sum: 0,\n      avgImprPos_cnt: 0\n    };\n\n    cur.clicks += r.clicks;\n    cur.impressions += r.impressions;\n\n    if (r.avgImprPos !== null && r.avgImprPos !== undefined && r.avgImprPos >= 0) {\n      cur.avgImprPos_sum += r.avgImprPos;\n      cur.avgImprPos_cnt += 1;\n    }\n\n    m.set(q, cur);\n  }\n\n  return [...m.values()].map(x => ({\n    key: x.key,\n    clicks: x.clicks,\n    impressions: x.impressions,\n    ctr: x.impressions ? x.clicks / x.impressions : 0,\n    avgImprPos: x.avgImprPos_cnt ? (x.avgImprPos_sum / x.avgImprPos_cnt) : null\n  }));\n}\n\nfunction indexByKey(arr){\n  const m = new Map();\n  for (const x of arr) m.set(x.key, x);\n  return m;\n}\n\n// GEO-style score (kept)\nfunction scoreItem(cur, prev){\n  const imprA = cur?.impressions || 0;\n  const clickA = cur?.clicks || 0;\n  const ctrA = cur?.ctr ?? safeDiv(clickA, imprA);\n\n  const imprB = prev?.impressions || 0;\n  const clickB = prev?.clicks || 0;\n\n  const imprGrowth = imprB ? (imprA - imprB) / imprB : (imprA > 0 ? 1 : 0);\n  const clickGrowth = clickB ? (clickA - clickB) / clickB : (clickA > 0 ? 1 : 0);\n\n  const gImpr = clamp((imprGrowth + 1) * 50) / 100;\n  const gClick = clamp((clickGrowth + 1) * 50) / 100;\n\n  const lowCtrBonus =\n    (imprA >= 30 && ctrA <= 0.01) ? 1 :\n    (imprA >= 50 && ctrA <= 0.02) ? 0.7 :\n    (imprA >= 100 && ctrA <= 0.03) ? 0.5 : 0;\n\n  const newVis = (imprB === 0 && imprA >= 20) ? 1 : 0;\n\n  const score = (gImpr * 55) + (gClick * 20) + (lowCtrBonus * 15) + (newVis * 10);\n\n  return {\n    clicks_a: clickA, impressions_a: imprA, ctr_a: ctrA,\n    clicks_b: clickB, impressions_b: imprB,\n    impr_growth: imprGrowth, click_growth: clickGrowth,\n    score: clamp(Math.round(score)),\n    signals: {\n      rising_visibility: imprGrowth > 0.2,\n      low_ctr_ai_intent: lowCtrBonus > 0,\n      new_visibility: newVis === 1,\n    }\n  };\n}\n\n// AI citation signal (lightweight, safe even with small data)\nfunction aiCitationScore(queryKey, cur, prev){\n  const imprA = cur?.impressions || 0;\n  const ctrA  = cur?.ctr ?? safeDiv(cur?.clicks || 0, imprA);\n  const avgPos = cur?.avgImprPos;\n\n  // Position score\n  let posScore = 0.35;\n  if (avgPos !== null && avgPos !== undefined) {\n    if (avgPos <= 3) posScore = 1.0;\n    else if (avgPos <= 6) posScore = 0.75;\n    else if (avgPos <= 10) posScore = 0.45;\n    else posScore = 0.2;\n  }\n\n  // Low CTR score (early-stage friendly)\n  let lowCtrScore = 0.2;\n  if (imprA >= 10 && ctrA <= 0.05) lowCtrScore = 0.7;\n  if (imprA >= 30 && ctrA <= 0.03) lowCtrScore = 0.9;\n  if (imprA >= 50 && ctrA <= 0.02) lowCtrScore = 1.0;\n\n  // Volume score\n  let volumeScore = 0.15;\n  if (imprA >= 10) volumeScore = 0.35;\n  if (imprA >= 30) volumeScore = 0.55;\n  if (imprA >= 80) volumeScore = 0.75;\n  if (imprA >= 200) volumeScore = 1.0;\n\n  // Intent heuristic\n  const q = String(queryKey || \"\").toLowerCase();\n  const infoHints = [\"how\", \"what\", \"why\", \"guide\", \"tutorial\", \"best\", \"vs\", \"compare\", \"review\", \"price\", \"meaning\", \"definition\", \"explain\"];\n  const navHints  = [\"login\", \"homepage\", \"official\", \"site:\", \"facebook\", \"instagram\", \"youtube\", \"anergyacademy\"];\n\n  const isInfo = infoHints.some(h => q.includes(h));\n  const isNav  = navHints.some(h => q.includes(h));\n\n  let intentScore = 0.5;\n  if (isInfo) intentScore = 0.85;\n  if (isNav) intentScore = 0.25;\n\n  const score =\n    (posScore * 40) +\n    (lowCtrScore * 30) +\n    (volumeScore * 20) +\n    (intentScore * 10);\n\n  const aiScore = clamp(Math.round(score));\n\n  const tier =\n    aiScore >= 75 ? \"HIGH\" :\n    aiScore >= 55 ? \"MEDIUM\" :\n    \"LOW\";\n\n  return {\n    ai_citation_score: aiScore,\n    ai_citation_tier: tier\n  };\n}\n\n// ---- Read input safely ----\nconst first = $input.first().json;\n\n// Bing sometimes returns [{ d: [...] }] or { d: [...] }\nconst root = Array.isArray(first) ? first[0] : first;\nconst rawRows = Array.isArray(root?.d) ? root.d : (Array.isArray(first?.d) ? first.d : []);\n\n// Normalize rows\nconst rows = rawRows.map(r => ({\n  query: r.Query,\n  date: bingDateToISO(r.Date),\n  clicks: num(r.Clicks),\n  impressions: num(r.Impressions),\n  avgImprPos: (r.AvgImpressionPosition === -1 ? null : num(r.AvgImpressionPosition)),\n}));\n\n// Split windows\nconst w7  = windowSplitCalendar(rows, 7);\nconst w28 = windowSplitCalendar(rows, 28);\n\n// Aggregate per window\nconst A7  = groupByQuery(w7.A);\nconst B7  = groupByQuery(w7.B);\nconst A28 = groupByQuery(w28.A);\nconst B28 = groupByQuery(w28.B);\n\n// Rank + attach AI signals\nfunction rank(A, B){\n  const idx = indexByKey(B);\n  return A.map(a => {\n      const prev = idx.get(a.key);\n      const base = scoreItem(a, prev);\n      const ai   = aiCitationScore(a.key, a, prev);\n      return {\n        key: a.key,\n        ...base,\n        avgImprPos: a.avgImprPos,\n        ...ai,\n      };\n    })\n    .sort((x,y) => (y.score - x.score));\n}\n\nreturn [{\n  json: {\n    meta: { source: \"Bing GetQueryStats\", generated_at: new Date().toISOString() },\n\n    windows: {\n      d7:  w7.window,\n      d28: w28.window,\n    },\n\n    debug: {\n      total_rows: rows.length,\n      d7:  { A_rows: w7.A.length,  B_rows: w7.B.length },\n      d28: { A_rows: w28.A.length, B_rows: w28.B.length },\n    },\n\n    query_ranked_7d: rank(A7, B7),\n    query_ranked_28d: rank(A28, B28),\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -96,
+        -352
+      ],
+      "id": "badcee4d-f579-452a-93a6-4f81d73e89a1",
+      "name": "Search Query Engine"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Workflow B: Report Builder (English)\n// Input: one item from Workflow A\n// Output: two items: 7D report + 28D report\n\nconst engine = $input.first().json;\n\n// Helpers\nfunction n(x){ return x === null || x === undefined ? 0 : Number(x); }\nfunction pct(x, digits=1){ return (n(x) * 100).toFixed(digits) + \"%\"; }\nfunction top(arr, k=10){ return (arr || []).slice(0, k); }\nfunction byScore(arr){ return (arr || []).slice().sort((a,b) => (b.score ?? 0) - (a.score ?? 0)); }\n\n// Opportunity rules (tune later)\nfunction isRising(x){ return !!x?.signals?.rising_visibility; }\nfunction isNewVis(x){ return !!x?.signals?.new_visibility; }\nfunction isLowCtrOpp(x){\n  // early-stage friendly thresholds\n  return n(x.impressions_a) >= 3 && n(x.ctr_a) <= 0.05;\n}\n\nfunction summarize(list){\n  const clicks = list.reduce((s,x) => s + n(x.clicks_a), 0);\n  const impr   = list.reduce((s,x) => s + n(x.impressions_a), 0);\n  const ctr    = impr ? clicks / impr : 0;\n  return { clicks, impressions: impr, ctr };\n}\n\nfunction buildReport(windowKey){\n  const is7 = windowKey === \"d7\";\n  const ranked = is7 ? (engine.query_ranked_7d || []) : (engine.query_ranked_28d || []);\n  const win = engine?.windows?.[windowKey] || {};\n\n  const rankedSorted = byScore(ranked);\n\n  const top10 = top(rankedSorted, 10);\n\n  const rising = rankedSorted.filter(isRising).slice(0, 15);\n  const newVis = rankedSorted.filter(isNewVis).slice(0, 15);\n  const lowCtr = rankedSorted.filter(isLowCtrOpp).slice(0, 15);\n\n  const totals = summarize(rankedSorted);\n\n  // Insights (plain English, copy-ready)\n  const insights = [];\n  if (top10.length) insights.push(`Top queries show where Bing is already testing your visibility in the last ${is7 ? \"7 days\" : \"28 days\"}.`);\n  if (rising.length) insights.push(`Rising visibility queries indicate topics that are gaining traction and should be reinforced with better on-page answers.`);\n  if (lowCtr.length) insights.push(`Low-CTR queries with impressions often indicate “answer intent” (people see you but don’t click). These are prime candidates for Q&A blocks and clearer titles.`);\n  if (!rising.length && !lowCtr.length) insights.push(`Data volume is still small; use this report to monitor early index signals rather than making big content decisions yet.`);\n\n  // Action plan (simple + useful)\n  const actions = [\n    `Create 1 short supporting post targeting the #1 rising query (or the top query if rising list is empty).`,\n    `Add a 5–8 question FAQ block to the best-matching existing page for the top 3 queries.`,\n    `Ensure internal links: link from your main pillar page to the pages/posts covering the top queries.`,\n  ];\n\n  return {\n    meta: engine.meta || {},\n    report_type: is7 ? \"BING_QUERY_REPORT_7D\" : \"BING_QUERY_REPORT_28D\",\n    window: win, // A/B date ranges\n    totals,\n    sections: {\n      top_queries: top10.map(x => ({\n        query: x.key,\n        clicks: x.clicks_a,\n        impressions: x.impressions_a,\n        ctr: pct(x.ctr_a),\n        avg_impr_position: x.avgImprPos,\n        score: x.score,\n        signals: x.signals\n      })),\n      rising_visibility: rising.map(x => ({\n        query: x.key,\n        impressions: x.impressions_a,\n        ctr: pct(x.ctr_a),\n        avg_impr_position: x.avgImprPos,\n        score: x.score\n      })),\n      low_ctr_opportunities: lowCtr.map(x => ({\n        query: x.key,\n        impressions: x.impressions_a,\n        ctr: pct(x.ctr_a),\n        avg_impr_position: x.avgImprPos,\n        recommended_fix: \"Improve title/H1 alignment + add FAQ/Q&A block + strengthen internal links\"\n      })),\n      new_visibility: newVis.map(x => ({\n        query: x.key,\n        impressions: x.impressions_a,\n        avg_impr_position: x.avgImprPos,\n        note: \"New query detected in this window\"\n      }))\n    },\n    insights,\n    actions\n  };\n}\n\n// Build two separate reports\nconst report7  = buildReport(\"d7\");\nconst report28 = buildReport(\"d28\");\n\n// Return as two separate n8n items\nreturn [\n  { json: report7 },\n  { json: report28 }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        112,
+        -352
+      ],
+      "id": "4d1cd1a5-7b0d-42e8-811c-264bbdf58696",
+      "name": "Build Search Query 7D 28D Report"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Page 7D + 28D Report (from normalized rows)\n// Input: { meta, rows[] }\n// Output: 2 items: BING_PAGE_REPORT_7D + BING_PAGE_REPORT_28D\n\nfunction clamp(n,a=0,b=100){ return Math.max(a, Math.min(b, n)); }\nfunction safeDiv(a,b){ return b ? a/b : 0; }\nfunction pct(x){ return (x * 100).toFixed(1) + \"%\"; }\n\nfunction windowSplitCalendar(rows, windowDays) {\n  const now = new Date();\n  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())); // today 00:00Z\n\n  const startA = new Date(end); startA.setUTCDate(startA.getUTCDate() - windowDays);\n  const startB = new Date(end); startB.setUTCDate(startB.getUTCDate() - windowDays * 2);\n  const endB   = new Date(end); endB.setUTCDate(endB.getUTCDate() - windowDays);\n\n  const inRange = (d, s, e) => {\n    if (!d) return false;\n    const dt = new Date(d + \"T00:00:00Z\");\n    return dt >= s && dt < e;\n  };\n\n  return {\n    A: rows.filter(r => inRange(r.date, startA, end)),\n    B: rows.filter(r => inRange(r.date, startB, endB)),\n    window: {\n      A: { start: startA.toISOString().slice(0,10), end: end.toISOString().slice(0,10) },\n      B: { start: startB.toISOString().slice(0,10), end: endB.toISOString().slice(0,10) },\n    }\n  };\n}\n\nfunction groupByPage(rows) {\n  const m = new Map();\n  for (const r of rows) {\n    const key = r.page;\n    if (!key) continue;\n\n    const cur = m.get(key) || {\n      key,\n      clicks: 0,\n      impressions: 0,\n      avgImprPos_sum: 0,\n      avgImprPos_cnt: 0\n    };\n\n    cur.clicks += r.clicks || 0;\n    cur.impressions += r.impressions || 0;\n\n    if (r.avgImprPos !== null && r.avgImprPos !== undefined && r.avgImprPos >= 0) {\n      cur.avgImprPos_sum += Number(r.avgImprPos);\n      cur.avgImprPos_cnt += 1;\n    }\n\n    m.set(key, cur);\n  }\n\n  return [...m.values()].map(x => ({\n    key: x.key,\n    clicks: x.clicks,\n    impressions: x.impressions,\n    ctr: x.impressions ? x.clicks / x.impressions : 0,\n    avgImprPos: x.avgImprPos_cnt ? (x.avgImprPos_sum / x.avgImprPos_cnt) : null\n  }));\n}\n\nfunction indexByKey(arr){\n  const m = new Map();\n  for (const x of arr) m.set(x.key, x);\n  return m;\n}\n\n// same spirit as your query scoring\nfunction scoreItem(cur, prev){\n  const imprA = cur?.impressions || 0;\n  const clickA = cur?.clicks || 0;\n  const ctrA = cur?.ctr ?? safeDiv(clickA, imprA);\n\n  const imprB = prev?.impressions || 0;\n  const clickB = prev?.clicks || 0;\n\n  const imprGrowth  = imprB ? (imprA - imprB) / imprB : (imprA > 0 ? 1 : 0);\n  const clickGrowth = clickB ? (clickA - clickB) / clickB : (clickA > 0 ? 1 : 0);\n\n  const gImpr  = clamp((imprGrowth + 1) * 50) / 100;\n  const gClick = clamp((clickGrowth + 1) * 50) / 100;\n\n  const lowCtrBonus =\n    (imprA >= 50 && ctrA <= 0.02) ? 1 :\n    (imprA >= 30 && ctrA <= 0.03) ? 0.7 :\n    (imprA >= 20 && ctrA <= 0.05) ? 0.5 : 0;\n\n  const newVis = (imprB === 0 && imprA >= 10) ? 1 : 0;\n\n  const score = (gImpr * 55) + (gClick * 20) + (lowCtrBonus * 15) + (newVis * 10);\n\n  return {\n    clicks_a: clickA, impressions_a: imprA, ctr_a: ctrA,\n    clicks_b: clickB, impressions_b: imprB,\n    impr_growth: imprGrowth, click_growth: clickGrowth,\n    score: clamp(Math.round(score)),\n    signals: {\n      rising_visibility: imprGrowth > 0.2,\n      low_ctr_ai_intent: lowCtrBonus > 0,\n      new_visibility: newVis === 1,\n    }\n  };\n}\n\nfunction buildReport(rows, windowDays){\n  // if Date is missing, everything collapses to today => useless windows\n  // So we drop rows without date to avoid fake signals\n  const dated = rows.filter(r => !!r.date);\n\n  const w = windowSplitCalendar(dated, windowDays);\n  const A = groupByPage(w.A);\n  const B = groupByPage(w.B);\n\n  const idxB = indexByKey(B);\n\n  const ranked = A.map(a => {\n    const prev = idxB.get(a.key);\n    const base = scoreItem(a, prev);\n    return {\n      page_url: a.key,\n      clicks: base.clicks_a,\n      impressions: base.impressions_a,\n      ctr: pct(base.ctr_a),\n      avg_impr_position: a.avgImprPos,\n      score: base.score,\n      signals: base.signals\n    };\n  }).sort((x,y) => y.score - x.score);\n\n  const totalClicks = A.reduce((s,x)=>s+(x.clicks||0),0);\n  const totalImpr   = A.reduce((s,x)=>s+(x.impressions||0),0);\n  const totalCtr    = safeDiv(totalClicks, totalImpr);\n\n  const top_pages = ranked.slice(0, 15);\n\n  const rising_visibility = ranked.filter(x => x.signals?.rising_visibility).slice(0, 15);\n\n  const low_ctr_opportunities = ranked\n    .filter(x => {\n      const ctrN = Number(String(x.ctr).replace('%','')) / 100;\n      return x.impressions >= 10 && ctrN <= 0.02;\n    })\n    .slice(0, 15)\n    .map(x => ({\n      page_url: x.page_url,\n      impressions: x.impressions,\n      ctr: x.ctr,\n      avg_impr_position: x.avg_impr_position,\n      recommended_fix: \"Improve title/H1 alignment + add FAQ/Q&A block + strengthen internal links\"\n    }));\n\n  const new_visibility = ranked.filter(x => x.signals?.new_visibility).slice(0, 15);\n\n  const insights = [\n    `Top pages show where Bing is testing your visibility in the last ${windowDays} days.`,\n    \"Rising visibility pages indicate content that should be reinforced with better on-page answers.\",\n    \"Low-CTR pages with impressions often indicate mismatch between snippet/title and intent. These are prime candidates for title fixes + FAQ blocks.\"\n  ];\n\n  const actions = [\n    \"Update the top 1–2 pages with rising visibility: add a 5–8 question FAQ block and tighten the first 120 words to match intent.\",\n    \"Add 3–5 internal links from your pillar page to the top pages in this report (contextual anchors, not generic).\",\n    \"For low-CTR pages: rewrite title + meta description to include the exact query language and a clearer benefit.\"\n  ];\n\n  return {\n    report_type: windowDays === 7 ? \"BING_PAGE_REPORT_7D\" : \"BING_PAGE_REPORT_28D\",\n    window: w.window,\n    totals: { clicks: totalClicks, impressions: totalImpr, ctr: totalCtr },\n    sections: { top_pages, rising_visibility, low_ctr_opportunities, new_visibility },\n    insights,\n    actions,\n    debug: { total_rows: dated.length, A_rows: w.A.length, B_rows: w.B.length }\n  };\n}\n\n// ---- INPUT ----\nconst input = $input.first().json;\nconst meta = input?.meta || { source: \"Bing GetPageStats\", generated_at: new Date().toISOString() };\nconst rows = Array.isArray(input?.rows) ? input.rows : [];\n\nconst r7 = buildReport(rows, 7);\nconst r28 = buildReport(rows, 28);\n\n// output 2 items for Switch\nreturn [\n  { json: { meta, ...r7 } },\n  { json: { meta, ...r28 } },\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        112,
+        -32
+      ],
+      "id": "1de91251-bda8-4451-95a2-77793c03b4ef",
+      "name": "Build Page Query 7D 28D Report"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get all 4 items (Query 7d/28d, Page 7d/28d)\nconst items = $input.all();\n\n// Helper to find specific report types in the list\nconst findReport = (type) => items.find(i => i.json.report_type === type)?.json || null;\n\n// Create the Master JSON\nconst masterReport = {\n  // Metadata\n  site: \"AnergyAcademy\",\n  generated_at: new Date().toISOString(),\n  \n  // The Data\n  bing_data: {\n    query_7d: findReport(\"BING_QUERY_REPORT_7D\"),\n    query_28d: findReport(\"BING_QUERY_REPORT_28D\"),\n    page_7d: findReport(\"BING_PAGE_REPORT_7D\"),\n    page_28d: findReport(\"BING_PAGE_REPORT_28D\")\n  }\n};\n\n// Return as 1 item for the AI Agent\nreturn [{ json: masterReport }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        -272
+      ],
+      "id": "ba213fac-0358-4bff-8343-8dbbf9ef2b67",
+      "name": "Final Bing GEO Aggregator"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Get input data\nconst input = $input.first().json;\n// Safety check: ensure arrays exist even if empty\nconst q7 = input.bing_data?.query_7d?.sections?.top_queries || [];\nconst q28 = input.bing_data?.query_28d?.sections?.top_queries || [];\nconst p7 = input.bing_data?.page_7d?.sections?.top_pages || [];\n\n// Helper to find 28-day data\nconst find28 = (queryText) => q28.find(i => i.query === queryText) || {};\n\nconst reportData = {\n  meta: { generated_at: new Date().toISOString(), mode: \"Baby Site Mode (All Data)\" },\n  geo_opportunities: [], \n  commercial_wins: [],   \n  early_signals: [],     // NEW: For keywords with just 1-2 impressions\n  urgent_fixes: []       \n};\n\n// 3. Loop through ALL 7-day data\nfor (const item of q7) {\n  const query = item.query;\n  const impr7 = Number(item.impressions) || 0;\n  const clicks7 = Number(item.clicks) || 0;\n  const pos7 = Number(item.avg_impr_position) || 0;\n  \n  // Get 28-day comparison\n  const item28 = find28(query);\n  const impr28 = Number(item28.impressions) || 0;\n  const baselineWeekly = impr28 > 0 ? (impr28 / 4) : 0;\n\n  // --- LOGIC UPDATES FOR NEW SITES ---\n  \n  // 1. Commercial Logic (Keep this)\n  const buyKeywords = [\"buy\", \"course\", \"service\", \"price\", \"review\", \"audit\", \"training\", \"bazaar\", \"amazon\", \"guide\", \"how\"];\n  const isCommercial = buyKeywords.some(k => query.toLowerCase().includes(k));\n\n  // 2. GEO Opportunity (Relaxed: Any position, Any impression, 0 Clicks)\n  // If you are ranking #50 but got an impression, it counts!\n  const isGeoOpp = impr7 > 0 && clicks7 === 0;\n\n  // 3. Trending (Relaxed: Any growth counts)\n  const isTrending = impr7 > baselineWeekly;\n\n  // --- CATEGORIZATION ---\n\n  // A. \"Cite Me\" Candidates (GEO)\n  if (isGeoOpp) {\n    reportData.geo_opportunities.push({\n      query: query,\n      position: Math.round(pos7 * 10) / 10,\n      impressions_7d: impr7,\n      insight: `Rank #${Math.round(pos7)} - Zero clicks (Potential AI Answer)`\n    });\n  }\n\n  // B. Commercial / Intent Wins\n  if (isCommercial) {\n    reportData.commercial_wins.push({\n      query: query,\n      trend: isTrending ? \"UP 📈\" : \"Stable\",\n      stats: `${impr7} impr`,\n      matched_url: \"Check Bing Master\"\n    });\n  }\n\n  // C. Early Signals (Everything else!)\n  // If it didn't fit above, put it here so you see EVERYTHING.\n  if (!isGeoOpp && !isCommercial) {\n    reportData.early_signals.push({\n      query: query,\n      stats: `${impr7} impr (Pos ${Math.round(pos7)})`\n    });\n  }\n}\n\n// Debug: If still empty, force a message\nif (q7.length === 0) {\n  reportData.debug_note = \"CRITICAL: No data found in Input. Please check if Bing Webmaster has data for these dates.\";\n}\n\nreturn [{ json: reportData }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        864,
+        -272
+      ],
+      "id": "2a44afab-279f-4f0f-80bb-fc101fae29e9",
+      "name": "Bing Strategy Engine"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=You are the **AI Content Brain** for {{ $('Final Bing GEO Aggregator').item.json.site }}.\nWrite a **Bing Growth Report** for a new website.\n\n### REPORT STRUCTURE\n\n# 🌱 Bing Early Signals Report\n*Status: Monitoring early traction.*\n\n## 🧠 \"Cite Me\" Opportunities (Zero Click)\n*Queries where we appeared but got no clicks.*\n*(Iterate `geo_opportunities`)*\n- **Query:** `[Query]` (Pos: `[position]`, Impr: `[impressions_7d]`)\n  - **Action:** Optimize Title/Snippet or add a Direct Answer table.\n\n## 💰 Commercial Intent Signals\n*Keywords with \"Buy/How/Guide\" intent.*\n*(Iterate `commercial_wins`)*\n- **Query:** `[Query]` (`[stats]`)\n\n## 📡 All Detected Signals\n*Every other keyword appearing in search.*\n*(Iterate `early_signals`)*\n- `[Query]` - `[stats]`\n\n### INPUT DATA\n{{ JSON.stringify($input.all()) }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        1232,
+        -272
+      ],
+      "id": "f0c67912-999a-4d43-8e79-b6ffe5993de0",
+      "name": "The Writer 4o",
+      "credentials": {
+        "openAiApi": {
+          "id": "lesK4hFOYwvXW1Vt",
+          "name": "OpenAI account - chinhotak"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://your-webhook-url-here.com",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "bing_geo_report",
+              "value": "={{ $json.output[0].content[0].text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1792,
+        -272
+      ],
+      "id": "bd7b0447-11d8-427d-be23-6e65925fe454",
+      "name": "Send to Bing GEO Agent"
+    },
+    {
+      "parameters": {
+        "content": "# Setup Bing Webmaster",
+        "height": 368,
+        "width": 448,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -976,
+        -336
+      ],
+      "typeVersion": 1,
+      "id": "bfe9d84f-8f00-42f4-bcec-081c9a722c01",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "# Get Bing Page Query Report for 7 and 28 Days",
+        "height": 272,
+        "width": 912,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -384,
+        -128
+      ],
+      "typeVersion": 1,
+      "id": "5b4a229e-c3ce-48ea-98ce-0f5aa594f985",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "# Convert and Combine Report",
+        "height": 224,
+        "width": 528,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        576,
+        -352
+      ],
+      "id": "5530adc3-41e1-4175-88ca-4e0949556a75",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "# OpenAI 4o to Summarize",
+        "height": 224,
+        "width": 464,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1136,
+        -352
+      ],
+      "typeVersion": 1,
+      "id": "3f795fb2-2e54-4913-890b-b194e8b52467",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "# Data Export",
+        "height": 224,
+        "width": 400,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1632,
+        -352
+      ],
+      "typeVersion": 1,
+      "id": "91123153-072b-4f41-a40f-2f73f5215a7e",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "# 🔮 Future SaaS Architecture (OAuth Setup)\n*Reference for upgrading to Multi-Tenant SaaS Mode later.*\n\n## 1. Where to Register\n**DO NOT** use Bing Webmaster Portal.\n**USE:** [Azure Portal > Microsoft Entra ID > App registrations](https://portal.azure.com)\n\n## 2. Azure App Setup\n1. **New Registration:**\n   - **Name:** Anergy SEO Engine\n   - **Account Type:** Multi-tenant (Any org + personal Microsoft accounts)\n   - **Redirect URI:** `https://[YOUR_N8N_DOMAIN]/rest/oauth2-credential/callback`\n2. **API Permissions:**\n   - Add **Bing Webmaster Tools API**\n   - Permission: `webmasters.read` (or full access)\n   - **IMPORTANT:** Click \"Grant Admin Consent\"\n3. **Secrets:** Generate **Client ID** & **Client Secret**.\n\n## 3. n8n OAuth2 Credential Config\n- **Grant Type:** Authorization Code\n- **Auth URL:** `https://login.microsoftonline.com/common/oauth2/v2.0/authorize`\n- **Token URL:** `https://login.microsoftonline.com/common/oauth2/v2.0/token`\n- **Scope:** `https://www.bing.com/webmasters/.default offline_access`\n- **Auth Method:** Header\n\n## 4. Why Upgrade?\n- Allows any user to log in with *their* Bing account.\n- Enables building a paid SaaS dashboard.\n- Dynamic site fetching without manual API keys.",
+        "height": 736,
+        "width": 1104
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        768,
+        16
+      ],
+      "typeVersion": 1,
+      "id": "0d52adbd-ad36-4f74-b734-49d5583f5e0c",
+      "name": "Sticky Note6"
+    }
+  ],
+  "pinData": {
+    "The Writer 4o": [
+      {
+        "json": {
+          "output": [
+            {
+              "id": "msg_03e29e756d3c01080069524c48c6a88190a65e4d666c39ec21",
+              "type": "message",
+              "status": "completed",
+              "content": [
+                {
+                  "type": "output_text",
+                  "annotations": [],
+                  "logprobs": [],
+                  "text": "# 🌱 Bing Early Signals Report\n*Status: Monitoring early traction.*\n\n## 🧠 \"Cite Me\" Opportunities (Zero Click)\n*No data available for \"Cite Me\" opportunities at this time.*\n\n## 💰 Commercial Intent Signals\n*No commercial intent signals detected.*\n\n## 📡 All Detected Signals\n*No early signals detected.*\n\n### Note\nThe current report indicates that there is no data available from Bing Webmaster for the specified dates. It is essential to ensure that the website is properly connected to Bing Webmaster Tools and that data collection is enabled. Regular monitoring and optimization will be crucial as the site continues to grow."
+                }
+              ],
+              "role": "assistant"
+            }
+          ]
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Access Bing Webmaster",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Access Bing Webmaster": {
+      "main": [
+        [
+          {
+            "node": "Get Bing Search Query (keywords)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Bing Page Search Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Bing Search Query (keywords)": {
+      "main": [
+        [
+          {
+            "node": "Search Query Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Bing Page Search Query": {
+      "main": [
+        [
+          {
+            "node": "Page Query Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Query Engine": {
+      "main": [
+        [
+          {
+            "node": "Build Search Query 7D 28D Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Search Query 7D 28D Report": {
+      "main": [
+        [
+          {
+            "node": "Final Bing GEO Aggregator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Page Query Engine": {
+      "main": [
+        [
+          {
+            "node": "Build Page Query 7D 28D Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Page Query 7D 28D Report": {
+      "main": [
+        [
+          {
+            "node": "Final Bing GEO Aggregator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Bing GEO Aggregator": {
+      "main": [
+        [
+          {
+            "node": "Bing Strategy Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bing Strategy Engine": {
+      "main": [
+        [
+          {
+            "node": "The Writer 4o",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "The Writer 4o": {
+      "main": [
+        [
+          {
+            "node": "Send to Bing GEO Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "2794814a-dfd3-4d8c-8d94-1c69ef7f3514",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ac8e33ad9a8ef496959f64b73684f5097d64b3b5f62665b5bb6f48dbe666b7a6"
+  },
+  "id": "1YkI6IMclJMTx6Ou",
+  "tags": [
+    {
+      "updatedAt": "2025-12-28T09:32:56.447Z",
+      "createdAt": "2025-12-28T09:32:56.447Z",
+      "id": "rLiFUrjK9odYegjZ",
+      "name": "bing web master"
+    },
+    {
+      "updatedAt": "2025-12-28T09:32:45.422Z",
+      "createdAt": "2025-12-28T09:32:45.422Z",
+      "id": "DEqoMI7g9sJT2801",
+      "name": "bing"
+    },
+    {
+      "updatedAt": "2025-12-21T12:33:41.082Z",
+      "createdAt": "2025-12-21T12:33:41.082Z",
+      "id": "CmxHjcXUTnNCLxT7",
+      "name": "anergy"
+    },
+    {
+      "updatedAt": "2025-12-17T05:25:01.685Z",
+      "createdAt": "2025-12-17T05:25:01.685Z",
+      "id": "4ZFBuH8wWFCIvu7j",
+      "name": "GEO"
+    }
+  ]
+}

@@ -1,0 +1,241 @@
+{
+  "name": "Day 2: Part 1 - The Brand DNA Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Enter Your Brand Info",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Brand Name"
+            },
+            {
+              "fieldLabel": "Product/Soltuion"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.3,
+      "position": [
+        -656,
+        -160
+      ],
+      "id": "25d9a3e9-fe82-4615-9d9f-7e653cf17f6a",
+      "name": "Your Brand Info",
+      "webhookId": "defcb710-77a0-4722-a76c-3b610c8ce4c7"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Here is the raw input from the founder:\nBrand Name:{{ $json['Brand Name'] }}\nProduct or Solution: {{ $json['Product/Soltuion'] }}\n\nINSTRUCTIONS:\n1. If the input is detailed, synthesize it.\n2. If the input is THIN (e.g., just \"It's a cup\"), use your \"Investor Intuition\" to hallucinate the best-case scenario. Invent a Premium, High-Value brand identity for them. Do not ask for more info—just build the pitch.",
+        "options": {
+          "systemMessage": "You are a Venture Capital Investor and Brand Strategist.\nYou take raw, messy product ideas and turn them into a \"Gold Standard\" Brand DNA Document.\n\nINPUT:\n- Brand Name\n- Product Description\n\nYOUR TASK:\nExtrapolate the following 4 Core Pillars. If the input is thin, use your knowledge of the category to fill in the best-case scenario.\n\n1. THE \"WHY NOW\" (Vision): Why does the world need this brand? (e.g., \"To end the era of unsanitary oral suction.\")\n2. THE \"MOAT\" (USP): What is the unfair advantage? (e.g., \"Hospital-grade power without batteries.\")\n3. THE \"TRIBE\" (Audience): Who is the specific bleeding-neck customer? (e.g., \"Anxious first-time moms who fear germs.\")\n4. THE \"VOICE\": How does the CEO speak? (e.g., \"Confident, Medical, Reassuring - NOT playful or silly.\")\n\nOUTPUT (JSON):\n{\n  \"brand_name\": \"...\",\n  \"vision_statement\": \"...\",\n  \"core_values\": \"...\",\n  \"tone_of_voice\": \"...\",\n  \"forbidden_words\": [\"Cheap\", \"Discount\", \"Basic\"]\n}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        -352,
+        -160
+      ],
+      "id": "07cc9c75-8524-4664-867a-b5da3f78f9db",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -384,
+        64
+      ],
+      "id": "b4fe8518-921a-4895-a119-5d8732fbbf97",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "AuGjoUSOUGHlHaTK",
+          "name": "Google Gemini(PaLM) - Gemini CLI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const newItems = [];\n\nfor (const item of $input.all()) {\n  const raw = item.json.output; // Get AI output\n  const cleaned = raw.replace(/```json/gi, '').replace(/```/g, '').trim();\n  const data = JSON.parse(cleaned);\n\n  newItems.push({\n    json: {\n      brand_name: data.brand_name,\n      vision_statement: data.vision_statement,\n      tone_of_voice: data.tone_of_voice,\n      \n      // FLATTEN THE LISTS HERE:\n      core_values: data.core_values.join(\", \"),       // Turns list into \"Value 1, Value 2\"\n      forbidden_words: data.forbidden_words.join(\", \") // Turns list into \"Word 1, Word 2\"\n    }\n  });\n}\n\nreturn newItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -160
+      ],
+      "id": "32885ed1-adea-4653-bf53-a169a2e779da",
+      "name": "split data to datatable"
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "ClzIelaXrjnodZNV",
+          "mode": "list",
+          "cachedResultName": "Brand_DNA_Writeup",
+          "cachedResultUrl": "/projects/pTXqS2oypbXZXkXc/datatables/ClzIelaXrjnodZNV"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "brand_name": "={{ $json.brand_name }}",
+            "vision_statement": "={{ $json.vision_statement }}",
+            "tone_of_voice": "={{ $json.tone_of_voice }}",
+            "core_values": "={{ $json.core_values }}",
+            "forbidden_words": "={{ $json.forbidden_words }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "brand_name",
+              "displayName": "brand_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "vision_statement",
+              "displayName": "vision_statement",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "tone_of_voice",
+              "displayName": "tone_of_voice",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "core_values",
+              "displayName": "core_values",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "forbidden_words",
+              "displayName": "forbidden_words",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        208,
+        -160
+      ],
+      "id": "c1a9d19a-9b61-47ec-80ad-3dde71a2e755",
+      "name": "Insert Brand DNA Data table"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Your Brand Info": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "split data to datatable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "split data to datatable": {
+      "main": [
+        [
+          {
+            "node": "Insert Brand DNA Data table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "65ef6e68-383e-4220-a9b7-64e7bd751b3a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ac8e33ad9a8ef496959f64b73684f5097d64b3b5f62665b5bb6f48dbe666b7a6"
+  },
+  "id": "XvnjqT1TsgGN2YJc",
+  "tags": [
+    {
+      "updatedAt": "2025-12-17T05:25:01.685Z",
+      "createdAt": "2025-12-17T05:25:01.685Z",
+      "id": "4ZFBuH8wWFCIvu7j",
+      "name": "GEO"
+    },
+    {
+      "updatedAt": "2025-08-05T13:05:20.352Z",
+      "createdAt": "2025-08-05T13:05:20.352Z",
+      "id": "Sfl4s3iYJcZkbmGG",
+      "name": "amazon"
+    },
+    {
+      "updatedAt": "2025-11-25T16:39:02.234Z",
+      "createdAt": "2025-11-25T16:39:02.234Z",
+      "id": "7itmlNmG4bAG5VX1",
+      "name": "reviews"
+    }
+  ]
+}

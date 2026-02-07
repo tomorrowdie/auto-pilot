@@ -1,0 +1,429 @@
+{
+  "name": "AnergyAcademy 28 Days Compare (GSC)",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "comparePageInsights",
+        "siteUrlCompare": "sc-domain:anergyacademy.com",
+        "rowLimitCompare": 10000,
+        "dimensionsCompare": [
+          "page",
+          "query"
+        ]
+      },
+      "type": "n8n-nodes-google-search-console.googleSearchConsole",
+      "typeVersion": 1,
+      "position": [
+        -192,
+        -64
+      ],
+      "id": "39bfc9cd-072f-4b2d-8aca-dd7baacc29a0",
+      "name": "28 Days Compare",
+      "credentials": {
+        "googleSearchConsoleOAuth2Api": {
+          "id": "YvjlNbFMSdEdzcfI",
+          "name": "Google Search Console - chinhotak"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an experienced SEO specialist analyzing data for {{ $('28 Days Compare').item.json.page }}.\n\nCRITICAL INSTRUCTIONS:\n- Use ONLY the real keyword data provided below\n- DO NOT say \"No data provided\" - the arrays ARE provided\n- If an array is empty [], say \"None in this period\" and move on\n- Create tables ONLY when arrays have items\n- Use actual keyword names and metrics in your analysis\n\n---\n\n**PERIOD COMPARISON:**\n- Current Period: {{ $json.summary.range_a.startDate }} to {{ $json.summary.range_a.endDate }}\n- Previous Period: {{ $json.summary.range_b.startDate }} to {{ $json.summary.range_b.endDate }}\n\n**SUMMARY METRICS:**\n- Impressions: {{ $json.summary.total_impr_b }} → {{ $json.summary.total_impr_a }}\n- Clicks: {{ $json.summary.total_clicks_b }} → {{ $json.summary.total_clicks_a }}\n- New Keywords: {{ $json.summary.new_keyword_count }}\n- Lost Keywords: {{ $json.summary.lost_keyword_count }}\n- Rising Keywords: {{ $json.summary.rising_keyword_count }}\n- Declining Keywords: {{ $json.summary.declining_keyword_count }}\n- Page 2 Opportunities: {{ $json.summary.page_two_opportunities_count }}\n\n**COMPLETE KEYWORD DATA:**\n\nNew Keywords Array:\n{{ JSON.stringify($json.new_keywords, null, 2) }}\n\nLost Keywords Array:\n{{ JSON.stringify($json.lost_keywords, null, 2) }}\n\nRising Keywords Array:\n{{ JSON.stringify($json.rising_keywords, null, 2) }}\n\nDeclining Keywords Array:\n{{ JSON.stringify($json.declining_keywords, null, 2) }}\n\nPage 2 Opportunities Array:\n{{ JSON.stringify($json.page_two_opportunities, null, 2) }}\n\n---\n\n**REPORT STRUCTURE TO GENERATE:**\n\n# SEO Performance Report: {{ $json.summary.range_a.startDate }} to {{ $json.summary.range_a.endDate }}\n\n**Comparison Period:** {{ $json.summary.range_b.startDate }} to {{ $json.summary.range_b.endDate }}\n\n## Section 1: Executive Summary\n\nWrite 2-3 sentences summarizing:\n- Impression change (use the numbers above)\n- Click change (use the numbers above)\n- Key keyword movements (new, lost, rising, declining counts)\n\n---\n\n## Section 2: Rising & Declining Keywords\n\n### 🚀 Top Rising Keywords (Winners)\n\nIf the Rising Keywords Array above has items:\n- Create a markdown table: | Query | Clicks (A vs B) | Impr. (A vs B) | Pos. Change | Insight |\n- Show TOP 5, sorted by impr_diff (highest first)\n- Format clicks as \"X → Y (+Z)\" using total_clicks_b, total_clicks_a, clicks_diff\n- Format impressions as \"X → Y (+Z)\" using total_impr_b, total_impr_a, impr_diff\n- Show pos_diff with ⬆️ for negative (improvement) or ⬇️ for positive (decline)\n- Add 1 sentence insight per keyword\n\nIf the array is empty:\n- Say \"No rising keywords in this period.\"\n\n### 📉 Top Declining Keywords (Losers)\n\nIf the Declining Keywords Array above has items:\n- Create a markdown table: | Query | Clicks (A vs B) | Impr. Change | Pos. Change | Insight |\n- Show TOP 5, sorted by impr_diff (most negative first)\n- Format similarly to rising keywords\n\nIf the array is empty:\n- Say \"No declining keywords in this period.\"\n\n---\n\n## Section 3: New & Lost Keywords\n\n### ✨ Top New Keywords\n\nIf the New Keywords Array above has items:\n- Create a markdown table: | Query | Impressions | Avg. Position | Top Pages | Insight |\n- Show TOP 5, sorted by total_impr_a (highest first)\n- Use: query, total_impr_a, avg_pos_a, first 2 items from pages array\n- Add 1 sentence insight about the opportunity\n\nIf the array is empty:\n- Say \"No new keywords in this period.\"\n\n### 💔 Top Lost Keywords\n\nIf the Lost Keywords Array above has items:\n- Create a markdown table: | Query | Previous Impressions | Previous Position | Insight |\n- Show TOP 5, sorted by total_impr_b (highest first)\n- Use: query, total_impr_b, avg_pos_b\n- Add 1 sentence about why this matters\n\nIf the array is empty:\n- Say \"No lost keywords in this period.\"\n\n---\n\n## Section 4: Page 2 Opportunities (Quick Wins)\n\nIf the Page 2 Opportunities Array above has items:\n- Create a markdown table: | Query | Current Position | Impressions | Clicks | Action Needed |\n- Show TOP 7, sorted by total_impr_a (highest first)\n- These are keywords with avg_pos_a between 10-20\n- Suggest specific actions to reach page 1\n\nIf the array is empty:\n- Say \"No page 2 opportunities in this period.\"\n\n---\n\n## Section 5: Recommended Actions (Next 30 Days)\n\nProvide 5-7 specific, actionable recommendations based on the ACTUAL keyword data above:\n\n**Requirements for each recommendation:**\n- Reference specific keywords by their actual query names from the arrays\n- Include actual metrics (positions, impressions, clicks)\n- Provide concrete actions (not generic advice)\n- Prioritize by potential impact\n\n**Examples of good recommendations:**\n- \"Optimize for 'omnilove' (position 7.16, 19 impressions) by adding internal links and building 2-3 backlinks\"\n- \"Push 'mesh feeder' from position 4 to #1 by updating H1 tags and meta descriptions\"\n- \"Improve CTR for all new keywords by rewriting title tags with emotional triggers\"\n\n**DO NOT write generic recommendations** - use the actual data!\n\n---\n\nNow generate the complete markdown report using the keyword arrays provided above.",
+        "options": {
+          "systemMessage": "You are an experienced SEO specialist. Your job is to produce a template-style, consistent Markdown report.\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        480,
+        128
+      ],
+      "id": "228d233b-481e-4f48-849e-0437c03510ba",
+      "name": "SEO Report Agent"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        -64
+      ],
+      "id": "3ede2247-4246-41e6-9dbe-4c910a2e4034",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        480,
+        0
+      ],
+      "id": "40efae94-c08b-4c27-b8f2-d4d861433a68",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "WaLro2I13lVFsPlB",
+          "name": "Gemini(PaLM) Api - chinhotak n8n pabbly"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "# 28 天谷歌流量报告",
+        "height": 400,
+        "width": 1104,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -480,
+        -160
+      ],
+      "typeVersion": 1,
+      "id": "6e139f2c-c352-4bb5-bcf7-9e5ec5dec273",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d8052556-a695-4926-b2ef-3e11ea0b5192",
+              "leftValue": "={{ $json.summary.total_impr_a }}",
+              "rightValue": 100,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            },
+            {
+              "id": "39f520a2-b5e0-44c8-b5f1-9487e8cfe5c2",
+              "leftValue": "={{ $json.summary.new_keyword_count }}",
+              "rightValue": "0",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        224,
+        -64
+      ],
+      "id": "b1ad402c-6282-4d4e-8bc1-2a43121ca9b9",
+      "name": "Traffic Check Gate"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "==You are the 'Ecommerce and AI training Growth Hacker' for {{ $('28 Days Compare').item.json.page }}.\n\n**CURRENT STATUS:**\nThe website traffic is LOW.\nWe currently rank for: {{ $('GSC Data Processor').item.json.new_keywords.map(k => k.query).join(', ') || 'No significant keywords yet' }}.\n\n**YOUR GOAL:**\nAnalyze the brand \"{{ $('28 Days Compare').item.json.page }}\" (AI + E-commerce Strategy) and generate 5 high-potential blog topics.\n\n**TASK:**\n1. Brainstorm 5 search queries that an Amazon/Shopify seller would type when looking for AI automation help.\n2. Create a blog title for each that promises a solution.\n\n**OUTPUT JSON:**\n[\n  {\n    \"target_keyword\": \"e.g. AI for Amazon PPC\",\n    \"blog_title\": \"e.g. How to Cut PPC Costs by 30% using AI\",\n    \"intent\": \"Efficiency/Cost Saving\"\n  }\n]",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        480,
+        -176
+      ],
+      "id": "78cc28b9-d874-4ae3-ad98-fcb0db1e4490",
+      "name": "Amazon Content Strategist"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Get the text output from Gemini Agent\nconst text = $input.item.json.output;\n\n// 2. Use Regex to find the content inside ```json ... ```\nconst jsonMatch = text.match(/```json\\n([\\s\\S]*?)\\n```/);\n\n// 3. If found, parse it into real JSON data\nif (jsonMatch && jsonMatch[1]) {\n  const cleanData = JSON.parse(jsonMatch[1]);\n  return cleanData; // Returns the array of 5 topics directly\n} else {\n  // Fallback: If AI didn't use markdown, try to return as is or log error\n  return { \"raw_text\": text, \"error\": \"No JSON block found\" };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        -176
+      ],
+      "id": "28688696-bacc-48b2-9ecf-e82023e1b1fb",
+      "name": "JSON Cleaner"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://google.com",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "report_markdown",
+              "value": "={{ $json.output }}"
+            },
+            {
+              "name": "report_type",
+              "value": "GSC Traffic Report"
+            },
+            {
+              "name": "date",
+              "value": "={{ $now.toFormat('yyyy-MM-dd') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        832,
+        128
+      ],
+      "id": "294dfb98-7dc3-473a-ba8a-099e01b1645c",
+      "name": "Send Report Webhook"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://your-webhook-url-here.com",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "topics",
+              "value": "={{ $json }}"
+            },
+            {
+              "name": "source",
+              "value": "anergy_gsc_monitor"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1040,
+        -176
+      ],
+      "id": "782e072d-20cb-42de-b35d-a35082977069",
+      "name": "Send to Blog Agent"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get all items from the previous node\nconst allItems = $input.all();\n\n// This will hold our aggregated data, one entry per query\nconst queryData = {};\n\n// This will hold the grand totals\nconst summary = {\n  total_clicks_a: 0,\n  total_clicks_b: 0,\n  total_impr_a: 0,\n  total_impr_b: 0\n};\n\n// STEP 1: Aggregate all the daily data into query-level totals\nfor (const item of allItems) {\n  const row = item.json;\n  const query = row.query;\n  \n  // Skip any rows that are missing a query\n  if (!query) continue;\n\n  // Add to the grand total summary\n  summary.total_clicks_a += row.clicks_a || 0;\n  summary.total_clicks_b += row.clicks_b || 0;\n  summary.total_impr_a += row.impr_a || 0;\n  summary.total_impr_b += row.impr_b || 0;\n\n  // Initialize the dictionary for this query if it's the first time we've seen it\n  if (!queryData[query]) {\n    queryData[query] = {\n      query: query,\n      total_clicks_a: 0,\n      total_clicks_b: 0,\n      total_impr_a: 0,\n      total_impr_b: 0,\n      impr_pos_a_sum: 0.0,\n      impr_pos_b_sum: 0.0,\n      pages: new Set()\n    };\n  }\n\n  // Add this row's data to the query's aggregate\n  const qEntry = queryData[query];\n  qEntry.total_clicks_a += row.clicks_a || 0;\n  qEntry.total_clicks_b += row.clicks_b || 0;\n  qEntry.total_impr_a += row.impr_a || 0;\n  qEntry.total_impr_b += row.impr_b || 0;\n  qEntry.pages.add(row.page);\n\n  // Calculate weighted average position\n  const pos_a = row.pos_a || 0;\n  const impr_a = row.impr_a || 0;\n  if (pos_a > 0 && impr_a > 0) {\n    qEntry.impr_pos_a_sum += pos_a * impr_a;\n  }\n\n  const pos_b = row.pos_b || 0;\n  const impr_b = row.impr_b || 0;\n  if (pos_b > 0 && impr_b > 0) {\n    qEntry.impr_pos_b_sum += pos_b * impr_b;\n  }\n}\n\n// STEP 2: Calculate final averages and categorize each query\nconst finalResults = {\n  summary: summary,\n  new_keywords: [],\n  lost_keywords: [],\n  rising_keywords: [],\n  declining_keywords: [],\n  page_two_opportunities: []\n};\n\nconst IMPRESSION_THRESHOLD = 10;\nconst POSITION_THRESHOLD = 1.0;\n\nfor (const [query, data] of Object.entries(queryData)) {\n  \n  // Calculate final weighted average positions\n  let avg_pos_a = 0.0;\n  if (data.total_impr_a > 0) {\n    avg_pos_a = data.impr_pos_a_sum / data.total_impr_a;\n  }\n\n  let avg_pos_b = 0.0;\n  if (data.total_impr_b > 0) {\n    avg_pos_b = data.impr_pos_b_sum / data.total_impr_b;\n  }\n\n  // Add final calculated fields\n  data.avg_pos_a = Math.round(avg_pos_a * 100) / 100;\n  data.avg_pos_b = Math.round(avg_pos_b * 100) / 100;\n  data.impr_diff = data.total_impr_a - data.total_impr_b;\n  data.clicks_diff = data.total_clicks_a - data.total_clicks_b;\n  \n  // Calculate position difference only if both periods have data\n  data.pos_diff = 0.0;\n  if (avg_pos_a > 0 && avg_pos_b > 0) {\n    data.pos_diff = Math.round((avg_pos_a - avg_pos_b) * 100) / 100;\n  }\n  \n  // Convert set to array for proper JSON output\n  data.pages = Array.from(data.pages);\n  \n  // Clean up the helper fields we don't need anymore\n  delete data.impr_pos_a_sum;\n  delete data.impr_pos_b_sum;\n\n  // Categorize the query\n  \n  // New Keywords (had 0 impressions, now has impressions)\n  if (data.total_impr_b === 0 && data.total_impr_a > 0) {\n    finalResults.new_keywords.push(data);\n  }\n  // Lost Keywords (had impressions, now has 0)\n  else if (data.total_impr_a === 0 && data.total_impr_b > 0) {\n    finalResults.lost_keywords.push(data);\n  }\n  // Existing Keywords (had impressions in both periods)\n  else if (data.total_impr_a > 0 && data.total_impr_b > 0) {\n    \n    // Rising Keywords (gained impressions AND improved ranking)\n    if (data.impr_diff > IMPRESSION_THRESHOLD && data.pos_diff < -POSITION_THRESHOLD) {\n      finalResults.rising_keywords.push(data);\n    }\n    \n    // Declining Keywords (lost impressions AND dropped ranking)\n    if (data.impr_diff < -IMPRESSION_THRESHOLD && data.pos_diff > POSITION_THRESHOLD) {\n      finalResults.declining_keywords.push(data);\n    }\n    \n    // Page Two Opportunities (Ranking on page 2: pos 10.1 to 20)\n    if (data.avg_pos_a > 10 && data.avg_pos_a <= 20) {\n      finalResults.page_two_opportunities.push(data);\n    }\n  }\n}\n\n// STEP 3: Sort the lists to show most important items first\nfinalResults.new_keywords.sort((a, b) => b.total_impr_a - a.total_impr_a);\nfinalResults.lost_keywords.sort((a, b) => b.total_impr_b - a.total_impr_b);\nfinalResults.rising_keywords.sort((a, b) => b.impr_diff - a.impr_diff);\nfinalResults.declining_keywords.sort((a, b) => a.impr_diff - b.impr_diff);\nfinalResults.page_two_opportunities.sort((a, b) => b.total_impr_a - a.total_impr_a);\n\n// Add counts to the summary\nsummary.new_keyword_count = finalResults.new_keywords.length;\nsummary.lost_keyword_count = finalResults.lost_keywords.length;\nsummary.rising_keyword_count = finalResults.rising_keywords.length;\nsummary.declining_keyword_count = finalResults.declining_keywords.length;\nsummary.page_two_opportunities_count = finalResults.page_two_opportunities.length;\n\n// Add date ranges from the first item\nif (allItems.length > 0) {\n  summary.range_a = allItems[0].json.range_a;\n  summary.range_b = allItems[0].json.range_b;\n}\n\n// Return the single JSON object to n8n\nreturn [finalResults];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        16,
+        -64
+      ],
+      "id": "4d9ff53f-af0a-427b-b898-844d0a96be40",
+      "name": "GSC Data Processor"
+    }
+  ],
+  "pinData": {
+    "JSON Cleaner": [
+      {
+        "json": {
+          "target_keyword": "AI Customer Service Automation",
+          "blog_title": "Delight Your E-commerce Customers 24/7: The Ultimate Guide to AI Customer Service Automation",
+          "intent": "Efficiency/Customer Satisfaction"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "target_keyword": "E-commerce PPC Optimization with AI",
+          "blog_title": "Boost Your ROI: How AI-Powered PPC Optimization is Revolutionizing E-commerce Ads",
+          "intent": "Profitability/Performance Improvement"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "target_keyword": "AI Product Research for E-commerce",
+          "blog_title": "Uncover Winning Products Faster: Your AI Blueprint for E-commerce Product Research Success",
+          "intent": "Growth/Market Advantage"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "target_keyword": "AI Content Generation for E-commerce",
+          "blog_title": "From Blanks to Best-Sellers: Leveraging AI for Irresistible E-commerce Product Descriptions",
+          "intent": "Efficiency/Sales Conversion"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "target_keyword": "AI Inventory Forecasting E-commerce",
+          "blog_title": "Master Your Stock: Prevent Shortages & Overstocking with AI-Driven E-commerce Inventory Forecasting",
+          "intent": "Operational Efficiency/Risk Management"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "28 Days Compare": {
+      "main": [
+        [
+          {
+            "node": "GSC Data Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "28 Days Compare",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "SEO Report Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Amazon Content Strategist",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Traffic Check Gate": {
+      "main": [
+        [
+          {
+            "node": "Amazon Content Strategist",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SEO Report Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SEO Report Agent": {
+      "main": [
+        [
+          {
+            "node": "Send Report Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Amazon Content Strategist": {
+      "main": [
+        [
+          {
+            "node": "JSON Cleaner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JSON Cleaner": {
+      "main": [
+        [
+          {
+            "node": "Send to Blog Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GSC Data Processor": {
+      "main": [
+        [
+          {
+            "node": "Traffic Check Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "8930889e-dfe1-4719-955f-9401fc6d6483",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ac8e33ad9a8ef496959f64b73684f5097d64b3b5f62665b5bb6f48dbe666b7a6"
+  },
+  "id": "egul3KV52eZuw5q5",
+  "tags": [
+    {
+      "updatedAt": "2025-12-17T05:25:01.685Z",
+      "createdAt": "2025-12-17T05:25:01.685Z",
+      "id": "4ZFBuH8wWFCIvu7j",
+      "name": "GEO"
+    },
+    {
+      "updatedAt": "2025-11-14T07:18:34.545Z",
+      "createdAt": "2025-11-14T07:18:34.545Z",
+      "id": "ELqiZ1ZhflWCnLAh",
+      "name": "google cloud console"
+    },
+    {
+      "updatedAt": "2025-11-14T07:18:42.250Z",
+      "createdAt": "2025-11-14T07:18:42.250Z",
+      "id": "hUGqwZfbzpwRvod6",
+      "name": "google search console"
+    },
+    {
+      "updatedAt": "2025-12-21T12:33:41.082Z",
+      "createdAt": "2025-12-21T12:33:41.082Z",
+      "id": "CmxHjcXUTnNCLxT7",
+      "name": "anergy"
+    }
+  ]
+}

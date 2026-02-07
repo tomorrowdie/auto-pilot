@@ -1,0 +1,20 @@
+# =============================================================================
+# Omni Traffic System — Python Dependencies
+# =============================================================================
+
+# --- Core Framework ---
+streamlit>=1.28.0
+fastapi>=0.95.0
+uvicorn[standard]>=0.21.0
+
+# --- Data Processing ---
+pandas>=2.0.0
+numpy>=1.21.0
+
+# --- HTTP / Networking ---
+httpx>=0.24.0
+requests>=2.28.0
+
+# --- File Uploads & Environment ---
+python-multipart>=0.0.6
+python-dotenv>=1.0.0

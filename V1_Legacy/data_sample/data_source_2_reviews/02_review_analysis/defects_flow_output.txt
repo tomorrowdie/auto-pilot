@@ -1,0 +1,58 @@
+[
+  {
+    "product_name": "Angry Factory Medieval Wooden Tankard",
+    "total_reviews": 4,
+    "primary_complaint": "Misleading product material (advertised as wood, but is resin/plastic) and difficult cleaning due to design flaws.",
+    "issue": "Misleading product material (advertised as wood, but is resin/plastic imitation)",
+    "count": 2,
+    "impacted_traffic_layer": "Product Word",
+    "risked_system_tag": "Product Misrepresentation - Material, Description Accuracy",
+    "issue_share": 0.5,
+    "category": null,
+    "id": 94,
+    "createdAt": "2025-12-24T03:51:28.170Z",
+    "updatedAt": "2025-12-24T03:51:28.170Z"
+  },
+  {
+    "product_name": "Angry Factory Medieval Wooden Tankard",
+    "total_reviews": 4,
+    "primary_complaint": "Misleading product material (advertised as wood, but is resin/plastic) and difficult cleaning due to design flaws.",
+    "issue": "Not dishwasher safe; water gets trapped between inner steel and outer resin, difficult to clean, potential for mold.",
+    "count": 3,
+    "impacted_traffic_layer": "Product Word",
+    "risked_system_tag": "Ease of Cleaning, Hygiene, Durability - Seal Integrity, Maintenance",
+    "issue_share": 0.75,
+    "category": null,
+    "id": 95,
+    "createdAt": "2025-12-24T03:51:28.170Z",
+    "updatedAt": "2025-12-24T03:51:28.170Z"
+  },
+  {
+    "product_name": "Angry Factory Medieval Wooden Tankard",
+    "total_reviews": 4,
+    "primary_complaint": "Misleading product material (advertised as wood, but is resin/plastic) and difficult cleaning due to design flaws.",
+    "issue": "Arrived with metal dust inside, requiring thorough initial washing.",
+    "count": 1,
+    "impacted_traffic_layer": "Product Word",
+    "risked_system_tag": "Initial Product Quality, Ready-to-Use, Manufacturing Cleanliness",
+    "issue_share": 0.25,
+    "category": null,
+    "id": 96,
+    "createdAt": "2025-12-24T03:51:28.170Z",
+    "updatedAt": "2025-12-24T03:51:28.170Z"
+  },
+  {
+    "product_name": "Angry Factory Medieval Wooden Tankard",
+    "total_reviews": 4,
+    "primary_complaint": "Misleading product material (advertised as wood, but is resin/plastic) and difficult cleaning due to design flaws.",
+    "issue": "Handle is uncomfortable/awkward for holding.",
+    "count": 1,
+    "impacted_traffic_layer": "Product Word",
+    "risked_system_tag": "Ergonomics, Comfort, Handle Design",
+    "issue_share": 0.25,
+    "category": null,
+    "id": 97,
+    "createdAt": "2025-12-24T03:51:28.170Z",
+    "updatedAt": "2025-12-24T03:51:28.170Z"
+  }
+]

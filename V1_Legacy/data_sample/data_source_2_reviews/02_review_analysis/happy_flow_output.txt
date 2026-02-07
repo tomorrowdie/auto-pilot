@@ -1,0 +1,13 @@
+[
+  {
+    "product_name": "Viking & Renaissance Themed Stainless Steel Tankard Mug",
+    "primary_hook": "Users adore this tankard for its authentic medieval/fantasy aesthetic, solid craftsmanship, and practical stainless steel lining, making it ideal for immersive themed events and robust everyday beverage enjoyment.",
+    "cosmo_intents": "• Renaissance Faire / Reenactment / Cosplay\n• Dungeons & Dragons (D&D) / Fantasy Themed Gaming Nights\n• Man Cave / Bar Decor / Conversation Piece\n• Themed Parties (e.g., Viking, Pirate, Oktoberfest, Game Day, Tailgating)\n• Drinking Beer / Stout / Mead (keeping beverages cold)\n• Gifting (for fantasy enthusiasts, adults)\n• Everyday Use (coffee, water, cold drinks)",
+    "rufus_keywords": "Authentic Medieval / Fantasy Aesthetic, Looks Like Real Wood (Faux Wood Exterior), Stainless Steel Lined Interior (SUS304), Heavy / Hefty / Solid Weight, Sturdy / Durable / Well Made, Large Capacity (20-22 oz), Cool Design / Great Detail / Realistic Look, Comfortable Grip Handle, Easy to Hand Wash, Keeps Drinks Cold / Practical Insulation (prevents sweating)",
+    "competitor_wins": "• More durable and less prone to cracking compared to real wood alternatives.\n• Superior hygiene and easier cleaning process than traditional wooden mugs due to the stainless steel liner.\n• Offers a sturdy and practical alternative to fragile, purely historical analogues, while maintaining aesthetic authenticity.",
+    "eeat_stories": "[Immersion & Role-play]: \"Worthy of ANY dwarf or viking! My voice deepens and suddenly I have an English accent.\" (Context: Themed drinking / Role-playing)\n\n[Tactile Quality & Craftsmanship]: \"This thing feels SOLID in your hand. The details in both the shape and paint look terrifically realistic.\" (Context: First impression / Handling experience)\n\n[Durability & Material Practicality]: \"The exterior isn’t real wood, but very study and will actually hold up better I think.\" (Context: Longevity / Material comparison for rugged use)\n\n[Beverage Temperature & Comfort]: \"The stainless steel body is perfect for storage in the freezer, so your beer stays ice cold for a long time if you‘re taking your time drinking it.\" (Context: Cold beverage enjoyment / Temperature retention)\n\n[Hygiene & Food Safety]: \"I love that the inside is stainless steel so I dont have to worry about the material the decorative exterior of the mug is made from leaching anything into drinks.\" (Context: Health & safety assurance for drinks)",
+    "id": 11,
+    "createdAt": "2025-12-24T03:51:09.071Z",
+    "updatedAt": "2025-12-24T03:51:09.071Z"
+  }
+]

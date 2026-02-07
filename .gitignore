@@ -1,0 +1,84 @@
+# =============================================================================
+# Omni Traffic System — .gitignore (The Gatekeeper)
+# =============================================================================
+
+# --- Legacy / Reference (DO NOT UPLOAD) ---
+streamlit_multipage_app/
+
+# --- Python ---
+*.pyc
+*.pyo
+*.pyd
+.Python
+__pycache__/
+
+# --- Secrets ---
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# --- Virtual Environments ---
+venv/
+.venv/
+env/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# --- IDE Settings ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- User Data (DO NOT UPLOAD CSVs/MDs) ---
+storage/*
+!storage/.gitkeep
+
+# --- Temp Files ---
+temp/
+*.tmp
+*.temp
+.cache/
+
+# --- Communication Files ---
+gemini_suggest.md
+report_to_gemini.md
+Report_Progress.md
+
+# --- Log Files ---
+*.log
+logs/
+
+# --- Node / Frontend ---
+node_modules/
+
+# --- Build Outputs ---
+build/
+dist/
+*.egg-info/
+
+# --- Database ---
+*.db
+*.sqlite
+*.sqlite3
+
+# --- Docker ---
+.dockerignore
+
+# --- Celery ---
+celerybeat-schedule
+celerybeat.pid
+
+# --- Testing ---
+.pytest_cache/
+.coverage
+htmlcov/
+coverage/
+*.lcov

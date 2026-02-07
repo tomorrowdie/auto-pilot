@@ -1,0 +1,933 @@
+{
+  "name": "Day 2: Part 2 - Amazon Review Analysis (Happy/Defect)",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "upload files",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "submit files",
+              "fieldType": "file"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.3,
+      "position": [
+        -992,
+        32
+      ],
+      "id": "977b4df5-4579-44fd-a642-c044b5ee8a9b",
+      "name": "Submit Sorftime Review",
+      "webhookId": "36705b76-d4c0-4a53-98e1-399a3675702d"
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {
+          "headerRow": true
+        }
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        -544,
+        32
+      ],
+      "id": "cd4579af-1659-484a-b6f8-8b6ce4d650e6",
+      "name": "Extract Review"
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "h4g1fd1SNaINGFHu",
+          "mode": "list",
+          "cachedResultName": "Sorftime_reviews",
+          "cachedResultUrl": "/projects/pTXqS2oypbXZXkXc/datatables/h4g1fd1SNaINGFHu"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ASIN": "={{ $json.ASIN }}",
+            "Reviewer": "={{ $json['评论人'] }}",
+            "Reviewer_Tag": "={{ $json['评论人标记'] }}",
+            "VP": "={{ $json['是否vp'] }}",
+            "Review_Date": "={{ $json['评论时间'] }}",
+            "Review_Title": "={{ $json['标题'] }}",
+            "Rating_Stars": "={{ $json['星级'] }}",
+            "Review_Content": "={{ $json['内容'] }}",
+            "Variant_Attributes": "={{ $json['变体属性'] }}",
+            "Helpful_Votes": "={{ $json['赞同数'] }}",
+            "Marketplace": "={{ $json['站点来源'] }}",
+            "Has_Image": "={{ $json['是否图片'] }}",
+            "Has_Video": "={{ $json['是否有视频'] }}",
+            "Review_Link": "={{ $json['链接'] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "ASIN",
+              "displayName": "ASIN",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Reviewer",
+              "displayName": "Reviewer",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "VP",
+              "displayName": "VP",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Review_Date",
+              "displayName": "Review_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Reviewer_Tag",
+              "displayName": "Reviewer_Tag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Review_Title",
+              "displayName": "Review_Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Review_Content",
+              "displayName": "Review_Content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Variant_Attributes",
+              "displayName": "Variant_Attributes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Rating_Stars",
+              "displayName": "Rating_Stars",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Helpful_Votes",
+              "displayName": "Helpful_Votes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Marketplace",
+              "displayName": "Marketplace",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Has_Image",
+              "displayName": "Has_Image",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Has_Video",
+              "displayName": "Has_Video",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Review_Link",
+              "displayName": "Review_Link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -336,
+        32
+      ],
+      "id": "2ba21dc1-f30e-4c7c-bcc3-0fa60e86842f",
+      "name": "Translate Header to n8n Table"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.Rating_Stars }}",
+                    "rightValue": 4,
+                    "operator": {
+                      "type": "number",
+                      "operation": "gte"
+                    },
+                    "id": "4a9d27a5-f70d-428c-85df-7f250656c010"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "e816cfeb-c1a9-4f8b-b871-12aa90d25a68",
+                    "leftValue": "={{ $json.Rating_Stars }}",
+                    "rightValue": 3,
+                    "operator": {
+                      "type": "number",
+                      "operation": "lte"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        -144,
+        32
+      ],
+      "id": "7a98c383-440c-42ba-9078-030b9c3c6ed1",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "fieldsToSummarize": {
+          "values": [
+            {
+              "aggregation": "append",
+              "field": "=defect_reviews"
+            }
+          ]
+        },
+        "fieldsToSplitBy": "ASIN",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.summarize",
+      "typeVersion": 1.1,
+      "position": [
+        272,
+        320
+      ],
+      "id": "182a0a72-89ca-461c-82cf-99d64baff9a8",
+      "name": "appended_defect_reviews"
+    },
+    {
+      "parameters": {
+        "jsCode": "const newItems = [];\n\n// Get all the files (submit_files_0, submit_files_1, etc.)\nconst binaryFiles = $input.first().binary;\n\n// Loop through each file and make it a separate item\nfor (const key of Object.keys(binaryFiles)) {\n  newItems.push({\n    json: {}, // Empty data\n    binary: {\n      data: binaryFiles[key] // Rename the file to standard \"data\"\n    }\n  });\n}\n\nreturn newItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -768,
+        32
+      ],
+      "id": "47f00c40-6ca1-4cc5-8621-be4e27d532d0",
+      "name": "Extract Input Files"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "338fc8e0-c23e-46cd-b848-2358307f5172",
+              "name": "defect_reviews",
+              "value": "={{ $json }}",
+              "type": "string"
+            },
+            {
+              "id": "ab8fe559-c012-4152-8957-4e9842b7d269",
+              "name": "ASIN",
+              "value": "={{ $json.ASIN }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        48,
+        224
+      ],
+      "id": "d4fec311-c243-4361-8121-21dddb68d664",
+      "name": "Group Review by ASIN (Defect Flow)"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "338fc8e0-c23e-46cd-b848-2358307f5172",
+              "name": "happy_reviews",
+              "value": "={{ $json }}",
+              "type": "string"
+            },
+            {
+              "id": "ab8fe559-c012-4152-8957-4e9842b7d269",
+              "name": "ASIN",
+              "value": "={{ $json.ASIN }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        128,
+        -64
+      ],
+      "id": "f6de8b18-72ae-4e81-ab9e-fc21c361e2ae",
+      "name": "Group Review by ASIN (Happy Result)"
+    },
+    {
+      "parameters": {
+        "fieldsToSummarize": {
+          "values": [
+            {
+              "aggregation": "append",
+              "field": "=happy_reviews"
+            }
+          ]
+        },
+        "fieldsToSplitBy": "ASIN",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.summarize",
+      "typeVersion": 1.1,
+      "position": [
+        352,
+        -64
+      ],
+      "id": "3d4fbd37-71de-4049-9a53-f462f7c593e6",
+      "name": "appended_happy_reviews"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        448,
+        96
+      ],
+      "id": "5b287d81-ac7d-4286-91f6-734d1fa2dd39",
+      "name": "Google Gemini 2.5 flash - happy",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "WaLro2I13lVFsPlB",
+          "name": "Gemini(PaLM) Api - chinhotak n8n pabbly"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        624,
+        672
+      ],
+      "id": "2f36c857-a5f1-4df3-a29a-01db5c11c547",
+      "name": "Google Gemini 2.5 flash - defects",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "WaLro2I13lVFsPlB",
+          "name": "Gemini(PaLM) Api - chinhotak n8n pabbly"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Here is the batch of reviews to analyze: {{ JSON.stringify($json.appended_happy_reviews) }}",
+        "options": {
+          "systemMessage": "=You are an Amazon COSMO & Brand Knowledge Graph Architect.\nYou are analyzing a batch of POSITIVE reviews (4-5 stars) to build a \"Brand DNA\" report optimized for AI Search (Rufus, Google SGE).\n\nYour Mission: Extract the \"Semantic Truth\" of why users love this product to feed into our content strategy.\n\nStep 1: Extract COSMO/Rufus Entities\nIdentify specific user intents and contexts.\n- User Intent: Why did they buy? (e.g., \"Replacing a broken stick,\" \"Training for a tournament\")\n- Usage Context: Where/How are they using it? (e.g., \"Late night gaming,\" \"Travel setup\")\n- Semantic Keywords: What specific adjectives do they use? (e.g., \"Snap-action,\" \"Low-profile,\" \"Silent\")\n\nStep 2: Extract Google EEAT Signals (Experience)\nFind specific \"Real Life\" evidence that proves quality.\n- The \"Aha!\" Moment: The specific instant they fell in love. (e.g., \"The moment I did a wavedash perfectly\")\n- Durability/Feel: Physical descriptions. (e.g., \"Cold aluminum touch,\" \"Heavy enough not to slide\")\n\nStep 3: Competitor Analysis (If this is a competitor ASIN)\n- The \"Switch Driver\": Why did they choose this over others? (e.g., \"Better than Hitbox because of the cable lock\")\n\nOutput Format (JSON Only):\n{\n  \"product_name\": \"Detected Name\",\n  \"brand_dna\": {\n    \"primary_hook\": \"The one-sentence reason people buy this\",\n    \"cosmo_intents\": [\"Tournament Play\", \"Silent Night Gaming\", \"Travel\"],\n    \"rufus_keywords\": [\"Optical Switches\", \"Low Latency\", \"Slim Profile\"],\n    \"eeat_experiences\": [\n      {\n        \"angle\": \"Precision\",\n        \"quote\": \"I stopped missing inputs immediately.\",\n        \"context\": \"Fighting Games / Tekken\"\n      },\n      {\n        \"angle\": \"Comfort\",\n        \"quote\": \"My wrists don't hurt after 4 hours.\",\n        \"context\": \"Ergonomics\"\n      }\n    ],\n    \"competitor_wins\": [\"Cheaper than Razer\", \"More moddable than Hori\"]\n  }\n}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        560,
+        -64
+      ],
+      "id": "d6093d7e-33f5-4a9f-9cd0-3f03655db78c",
+      "name": "AI Agent - Happy"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Here is the batch of reviews to analyze: {{ JSON.stringify($json.appended_defect_reviews) }}",
+        "options": {
+          "systemMessage": "=You are an Amazon Traffic & Product Analyst.\nYou are analyzing a batch of negative reviews (<=3 stars) for a specific ASIN.\n\nYour Goal: Identify the \"Product Context\", map complaints to Traffic Strategy (Sea King), and identify AI Search Blockers (Rufus/COSMO).\n\nStep 1: Identify the Product\nBased on the review content, identify:\n- Product Name\n- Category\n\nStep 2: Analyze Complaints using \"Sea King\" Logic\nFor each review, determine which \"Traffic Layer\" is being hurt:\n1. Product Word (Hurt definition? e.g., \"Not a fast charger\")\n2. Category Word (Hurt category? e.g., \"Bad massage tool\")\n3. Usage/Scene Word (Fail in specific scene? e.g., \"Failed during travel\")\n4. Gift Word (Bad gift experience?)\n\nStep 3: Analyze \"AI Search Risks\" (Rufus & COSMO)\nDetermine how this defect hurts AI recommendations:\n- Rufus Blocker: What specific question will Rufus answer \"No\" to because of this? (e.g., \"Is it durable?\")\n- COSMO Context Fail: What specific user intent failed? (e.g., \"Buying for Tournament Play\")\n\nOutput Format (JSON Only):\n{\n  \"product_name\": \"Detected Name\",\n  \"batch_summary\": {\n    \"total_reviews\": 10,\n    \"primary_complaint\": \"Overheating\",\n    \"impact_analysis\": [\n      {\n        \"issue\": \"Device gets too hot\",\n        \"count\": 4,\n        \"impacted_traffic_layer\": \"Product Word\",\n        \"risked_system_tag\": \"Quality Attribute - Safety\",\n        \"rufus_blocker\": \"Is this safe for kids?\",\n        \"cosmo_context_fail\": \"Long Gaming Sessions\"\n      }\n    ]\n  }\n}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        608,
+        464
+      ],
+      "id": "30ef0e54-cff1-450a-93e6-5502f3d5bff6",
+      "name": "AI Agent - Defects"
+    },
+    {
+      "parameters": {
+        "jsCode": "const newItems = [];\n\n// Loop through every product (8BitDo, Razer, etc.)\nfor (const item of $input.all()) {\n  const raw = item.json.output;\n  if (!raw) continue;\n\n  // 1. Clean the Markdown\n  const cleaned = raw.replace(/```json/gi, '').replace(/```/g, '').trim();\n  const data = JSON.parse(cleaned);\n  \n  const dna = data.brand_dna;\n\n  // 2. Flatten the Lists (Join them with newlines or commas)\n  // This turns [\"A\", \"B\"] into \"A, B\" so it fits in one Excel cell.\n  \n  const intents_text = dna.cosmo_intents ? dna.cosmo_intents.join(\"\\n• \") : \"\";\n  const keywords_text = dna.rufus_keywords ? dna.rufus_keywords.join(\", \") : \"\";\n  const wins_text = dna.competitor_wins ? dna.competitor_wins.join(\"\\n• \") : \"\";\n\n  // 3. Format the EEAT Stories (Combine Angle + Quote)\n  let eeat_text = \"\";\n  if (dna.eeat_experiences) {\n    eeat_text = dna.eeat_experiences.map(e => \n      `[${e.angle}]: \"${e.quote}\" (Context: ${e.context})`\n    ).join(\"\\n\\n\");\n  }\n\n  // 4. Create the Row\n  newItems.push({\n    json: {\n      product_name: data.product_name,\n      primary_hook: dna.primary_hook,\n      \n      // These big text blocks are perfect for your Content Team\n      cosmo_intents: \"• \" + intents_text,\n      rufus_keywords: keywords_text,\n      competitor_wins: \"• \" + wins_text,\n      eeat_stories: eeat_text\n    }\n  });\n}\n\nreturn newItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        -96
+      ],
+      "id": "7e87e0a2-4947-4cdd-9c2d-8d4f574cfdce",
+      "name": "Markdown Converter - happy"
+    },
+    {
+      "parameters": {
+        "jsCode": "const newItems = [];\n\n// 1. Loop through every product found (Razer, 8BitDo, etc.)\nfor (const item of $input.all()) {\n  const raw = item.json.output;\n\n  // Safety check: if no output, skip\n  if (!raw) continue;\n\n  // 2. Clean the Markdown\n  const cleaned = raw.replace(/```json/gi, '').replace(/```/g, '').trim();\n\n  // 3. Parse the data\n  const data = JSON.parse(cleaned);\n  const summary = data.batch_summary;\n  const issues = summary.impact_analysis;\n\n  // 4. Create a separate row for each issue\n  for (const issue of issues) {\n    newItems.push({\n      json: {\n        product_name: data.product_name,\n        category: data.category,\n        total_reviews: summary.total_reviews,\n        primary_complaint: summary.primary_complaint,\n        issue: issue.issue,\n        count: issue.count,\n        impacted_traffic_layer: issue.impacted_traffic_layer,\n        risked_system_tag: issue.risked_system_tag,\n        issue_share: issue.count / summary.total_reviews // Calculates %\n      }\n    });\n  }\n}\n\n// 5. Return everything as one big table\nreturn newItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        512
+      ],
+      "id": "578440bc-604b-4c3f-bda4-5a6699fc651d",
+      "name": "Markdown Converter - defects"
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "WlXGgaeiZEJ1ZxYM",
+          "mode": "list",
+          "cachedResultName": "Brand_DNA (AMZ Review Happy Flow)",
+          "cachedResultUrl": "/projects/pTXqS2oypbXZXkXc/datatables/WlXGgaeiZEJ1ZxYM"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "product_name": "={{ $json.product_name }}",
+            "primary_hook": "={{ $json.primary_hook }}",
+            "cosmo_intents": "={{ $json.cosmo_intents }}",
+            "rufus_keywords": "={{ $json.rufus_keywords }}",
+            "competitor_wins": "={{ $json.competitor_wins }}",
+            "eeat_stories": "={{ $json.eeat_stories }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "product_name",
+              "displayName": "product_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "primary_hook",
+              "displayName": "primary_hook",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "cosmo_intents",
+              "displayName": "cosmo_intents",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "rufus_keywords",
+              "displayName": "rufus_keywords",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "competitor_wins",
+              "displayName": "competitor_wins",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "eeat_stories",
+              "displayName": "eeat_stories",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        -96
+      ],
+      "id": "1cac0f02-f5b5-45b3-8ef0-663ee7304c81",
+      "name": "Insert to Data table - Happy"
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "LNK580I8o4Vd3UxB",
+          "mode": "list",
+          "cachedResultName": "Defect_Tracker",
+          "cachedResultUrl": "/projects/pTXqS2oypbXZXkXc/datatables/LNK580I8o4Vd3UxB"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "product_name": "={{ $json.product_name }}",
+            "total_reviews": "={{ $json.total_reviews }}",
+            "primary_complaint": "={{ $json.primary_complaint }}",
+            "issue": "={{ $json.issue }}",
+            "count": "={{ $json.count }}",
+            "impacted_traffic_layer": "={{ $json.impacted_traffic_layer }}",
+            "risked_system_tag": "={{ $json.risked_system_tag }}",
+            "issue_share": "={{ $json.issue_share }}",
+            "category": "={{ $json.category }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "product_name",
+              "displayName": "product_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "total_reviews",
+              "displayName": "total_reviews",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "primary_complaint",
+              "displayName": "primary_complaint",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "issue",
+              "displayName": "issue",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "count",
+              "displayName": "count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "impacted_traffic_layer",
+              "displayName": "impacted_traffic_layer",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "issue_share",
+              "displayName": "issue_share",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "risked_system_tag",
+              "displayName": "risked_system_tag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        512
+      ],
+      "id": "1c6309c9-41cb-4bce-a46d-6fb2f6c7cb3b",
+      "name": "Insert to Data Table - Defects"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Submit Sorftime Review": {
+      "main": [
+        [
+          {
+            "node": "Extract Input Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Review": {
+      "main": [
+        [
+          {
+            "node": "Translate Header to n8n Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Translate Header to n8n Table": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Group Review by ASIN (Happy Result)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Group Review by ASIN (Defect Flow)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "appended_defect_reviews": {
+      "main": [
+        [
+          {
+            "node": "AI Agent - Defects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Input Files": {
+      "main": [
+        [
+          {
+            "node": "Extract Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Group Review by ASIN (Defect Flow)": {
+      "main": [
+        [
+          {
+            "node": "appended_defect_reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Group Review by ASIN (Happy Result)": {
+      "main": [
+        [
+          {
+            "node": "appended_happy_reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "appended_happy_reviews": {
+      "main": [
+        [
+          {
+            "node": "AI Agent - Happy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini 2.5 flash - happy": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent - Happy",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini 2.5 flash - defects": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent - Defects",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent - Defects": {
+      "main": [
+        [
+          {
+            "node": "Markdown Converter - defects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent - Happy": {
+      "main": [
+        [
+          {
+            "node": "Markdown Converter - happy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Markdown Converter - happy": {
+      "main": [
+        [
+          {
+            "node": "Insert to Data table - Happy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Markdown Converter - defects": {
+      "main": [
+        [
+          {
+            "node": "Insert to Data Table - Defects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f9b16490-91bd-4fe4-95c1-819ed9290172",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ac8e33ad9a8ef496959f64b73684f5097d64b3b5f62665b5bb6f48dbe666b7a6"
+  },
+  "id": "TltlTcxfataY1zZy",
+  "tags": [
+    {
+      "updatedAt": "2025-08-05T13:05:20.352Z",
+      "createdAt": "2025-08-05T13:05:20.352Z",
+      "id": "Sfl4s3iYJcZkbmGG",
+      "name": "amazon"
+    },
+    {
+      "updatedAt": "2025-11-25T16:39:02.234Z",
+      "createdAt": "2025-11-25T16:39:02.234Z",
+      "id": "7itmlNmG4bAG5VX1",
+      "name": "reviews"
+    },
+    {
+      "updatedAt": "2025-12-17T05:25:01.685Z",
+      "createdAt": "2025-12-17T05:25:01.685Z",
+      "id": "4ZFBuH8wWFCIvu7j",
+      "name": "GEO"
+    }
+  ]
+}
