@@ -13,6 +13,7 @@ Usage:
 
 from __future__ import annotations
 
+import glob
 import logging
 import os
 import sys
@@ -24,6 +25,7 @@ import httpx
 import pandas as pd
 from fastapi import BackgroundTasks, FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 # ---------------------------------------------------------------------------
 # Path setup — ensure V2_Engine is importable
@@ -227,6 +229,58 @@ async def get_job_status(job_id: str):
     return _jobs[job_id]
 
 
+@app.get("/api/v1/knowledge/latest/catalog_insight")
+async def get_latest_catalog_insight():
+    """
+    Pull Model — returns the most recently created analysis
+    from the Catalog Insight folder (both Markdown and CSV data).
+
+    Designed for n8n to consume: "What was the last analysis?"
+    """
+    catalog_dir = os.path.join(
+        _PROJECT_ROOT, "V2_Engine", "knowledge_base", "storage", "Catalog Insight",
+    )
+    if not os.path.isdir(catalog_dir):
+        return JSONResponse(
+            status_code=404,
+            content={"status": "empty", "message": "No analyses found yet."},
+        )
+
+    # Find the most recent .md file by modification time
+    md_files = glob.glob(os.path.join(catalog_dir, "*.md"))
+    if not md_files:
+        return JSONResponse(
+            status_code=404,
+            content={"status": "empty", "message": "No analyses found yet."},
+        )
+
+    latest_md = max(md_files, key=os.path.getmtime)
+    md_filename = os.path.basename(latest_md)
+
+    with open(latest_md, "r", encoding="utf-8") as f:
+        md_content = f.read()
+
+    # Look for matching CSV
+    csv_filename = md_filename.replace(".md", ".csv")
+    csv_path = os.path.join(catalog_dir, csv_filename)
+    csv_data = None
+    csv_rows = 0
+    if os.path.exists(csv_path):
+        csv_df = pd.read_csv(csv_path)
+        csv_rows = len(csv_df)
+        csv_data = csv_df.to_dict(orient="records")
+
+    return {
+        "status": "ok",
+        "filename": md_filename,
+        "csv_filename": csv_filename if csv_data else None,
+        "csv_rows": csv_rows,
+        "markdown": md_content,
+        "csv_data": csv_data,
+        "retrieved_at": datetime.now().isoformat(),
+    }
+
+
 @app.get("/health")
 async def health():
     return {"status": "healthy", "service": "Catalog Insight Async API"}
@@ -241,6 +295,7 @@ async def root():
         "endpoints": {
             "analyze": "POST /api/v1/market/analyze_async",
             "job_status": "GET /api/v1/market/jobs/{job_id}",
+            "latest_analysis": "GET /api/v1/knowledge/latest/catalog_insight",
             "health": "GET /health",
         },
     }

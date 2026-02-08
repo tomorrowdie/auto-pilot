@@ -62,11 +62,13 @@ with st.sidebar:
 
     # --- File Upload ---
     uploaded = st.file_uploader(
-        "Upload H10 Xray / Cerebro CSV",
+        "Upload H10 Chrome",
         type=["csv"],
         accept_multiple_files=True,
         help="Upload one or more Helium 10 CSV exports.",
     )
+
+    _CATALOG_FOLDER = "Catalog Insight"
 
     if uploaded:
         if st.button("Analyze", type="primary", use_container_width=True):
@@ -94,7 +96,27 @@ with st.sidebar:
                 except OSError:
                     pass
 
-            st.success(f"Processed {len(df)} rows.")
+            # Auto-save results to Catalog Insight/
+            from datetime import datetime as _dt
+            _ts = _dt.now().strftime("%Y%m%d_%H%M")
+            _title = f"catalog_insight_{_ts}"
+            _md = snapshot_to_markdown(_title, snapshot)
+            _md_fname = kb.make_filename(_title)
+            kb.save_insight(_CATALOG_FOLDER, _md_fname, _md)
+
+            # Save cleaned CSV alongside the markdown
+            _csv_fname = _md_fname.replace(".md", ".csv")
+            _csv_dir = os.path.join(
+                _PROJECT_ROOT, "V2_Engine", "knowledge_base",
+                "storage", _CATALOG_FOLDER,
+            )
+            os.makedirs(_csv_dir, exist_ok=True)
+            df.to_csv(os.path.join(_csv_dir, _csv_fname), index=False)
+
+            st.success(
+                f"Processed {len(df)} rows. "
+                f"Saved to `{_CATALOG_FOLDER}/{_md_fname}`"
+            )
 
     if "file_info" in st.session_state:
         st.divider()
@@ -103,58 +125,31 @@ with st.sidebar:
             st.text(f"  {fi['filename']}")
             st.text(f"    {fi['rows']} rows, {fi['columns']} cols")
 
-    # --- API Runner ---
+    # --- Test API Connection ---
     st.divider()
-    with st.expander("\U0001f50c API Runner", expanded=False):
-        api_files = st.file_uploader(
-            "CSV files for async analysis",
-            type=["csv"],
-            accept_multiple_files=True,
-            key="api_files",
-            help="Upload CSVs to send to the Async API.",
-        )
-        api_category = st.text_input(
-            "Category",
-            value="0_catalog_insight",
-            key="api_category",
-        )
-        api_callback = st.text_input(
-            "Callback URL",
-            value="",
-            placeholder="https://webhook.site/...",
-            key="api_callback",
-            help="POST result to this URL when done (optional).",
-        )
+    with st.expander("\U0001f50c Test API Connection", expanded=False):
         api_url = st.text_input(
             "API Base URL",
-            value="http://localhost:8000",
+            value="https://auto-pilot-k5zw.onrender.com",
             key="api_base_url",
         )
-        if st.button("\U0001f680 Fire & Forget", key="btn_fire_forget", use_container_width=True):
-            if not api_files:
-                st.warning("Upload at least one CSV file.")
-            else:
-                endpoint = f"{api_url.rstrip('/')}/api/v1/market/analyze_async"
-                try:
-                    files_payload = [
-                        ("files", (f.name, f.getvalue(), "text/csv"))
-                        for f in api_files
-                    ]
-                    data = {"category": api_category}
-                    if api_callback.strip():
-                        data["callback_url"] = api_callback.strip()
-                    resp = requests.post(endpoint, files=files_payload, data=data, timeout=30)
-                    if resp.status_code == 200:
-                        result = resp.json()
-                        st.success(f"Queued! Job ID: **{result.get('job_id', '?')}**")
-                        st.json(result)
-                    else:
-                        st.error(f"API returned {resp.status_code}")
-                        st.text(resp.text[:500])
-                except requests.ConnectionError:
-                    st.error("Cannot connect to API. Is the server running?")
-                except Exception as e:
-                    st.error(f"Request failed: {e}")
+        if st.button("Get Latest Analysis", key="btn_get_latest", use_container_width=True):
+            endpoint = f"{api_url.rstrip('/')}/api/v1/knowledge/latest/catalog_insight"
+            try:
+                resp = requests.get(endpoint, timeout=30)
+                if resp.status_code == 200:
+                    result = resp.json()
+                    st.success(f"Connected! Latest: **{result.get('filename', '?')}**")
+                    st.json(result)
+                elif resp.status_code == 404:
+                    st.warning("No analyses found yet. Upload a CSV and run Analyze first.")
+                else:
+                    st.error(f"API returned {resp.status_code}")
+                    st.text(resp.text[:500])
+            except requests.ConnectionError:
+                st.error("Cannot connect to API. Is the server running?")
+            except Exception as e:
+                st.error(f"Request failed: {e}")
 
     # --- Knowledge Notebook ---
     st.divider()
