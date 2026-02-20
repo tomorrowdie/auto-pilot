@@ -8,9 +8,8 @@ Provides:
        - Bing:   API Key → Bing Webmaster API → verified site selectbox
     3. Analysis tabs triggered by the selected domain dropdowns
 
-Redirect URI is controlled by OAUTH_REDIRECT_BASE env var:
-    - Local dev:   http://localhost:8501  (default, no env var needed)
-    - Production:  https://auto-pilot.zeabur.app  (set in Zeabur Variables)
+Redirect URI is hardcoded to https://auto-pilot.zeabur.app (_REDIRECT_BASE).
+    Update _REDIRECT_BASE directly if the production domain changes.
 
 Called from app.py via:
     from V2_Engine.dashboard.webmaster_page import render_webmaster_page
@@ -29,7 +28,7 @@ logger = logging.getLogger(__name__)
 os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
 
 # Single source of truth for the redirect base — read once at import time
-_REDIRECT_BASE = os.getenv("OAUTH_REDIRECT_BASE", "http://localhost:8501")
+_REDIRECT_BASE = "https://auto-pilot.zeabur.app"
 
 
 # ===========================================================================
