@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(test:*)",
+      "Bash(for file in \"ENV_SETUP_GUIDE\" \"STEP3_LOCAL_ENVIRONMENT_TESTING\" \"STEP4_START_BACKEND_SERVICES\" \"STEP5_TEST_OAUTH_FLOW\" \"STEP6_TEST_PRODUCT_SYNC\")",
+      "Bash(echo:*)",
+      "Bash(done)",
+      "Bash(for file in \"COMPLETE_LOCAL_TESTING_GUIDE\" \"DEPLOYMENT_TESTING_STATUS\" \"TESTING_START_HERE\" \"COMPLETION_SUMMARY\")",
+      "Bash(ls:*)",
+      "Bash(python -m V2_Engine.processors.source_5_webmaster.test_sitemap:*)",
+      "Bash(python -m V2_Engine.processors.source_0_market_data.test_ingest:*)",
+      "Bash(python:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

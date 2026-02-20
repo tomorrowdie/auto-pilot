@@ -1,0 +1,98 @@
+# =============================================================================
+# Omni Traffic System — .gitignore (The Gatekeeper)
+# =============================================================================
+
+# --- Data Directory (SQLite DBs, CSVs, Parquet) ---
+data/
+
+# --- Legacy / Archive (DO NOT UPLOAD) ---
+_archive/
+V1_Legacy/
+V1_Engine/
+v1/
+000-BYOK-Model/
+streamlit_multipage_app/
+
+# --- Python ---
+*.pyc
+*.pyo
+*.pyd
+.Python
+__pycache__/
+
+# --- Secrets ---
+.env
+.env.*
+*.env
+!.env.example
+.streamlit/secrets.toml
+
+# --- Virtual Environments ---
+venv/
+.venv/
+env/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# --- IDE Settings ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Knowledge Base Storage (user data, not code) ---
+V2_Engine/knowledge_base/storage/
+
+# --- Temp Files ---
+temp/
+*.tmp
+*.temp
+.cache/
+
+# --- Markdown (docs, reports, notes — not for deployment) ---
+*.md
+!README.md
+
+# --- Log Files ---
+*.log
+logs/
+
+# --- Node / Frontend ---
+node_modules/
+
+# --- Build Outputs ---
+build/
+dist/
+*.egg-info/
+
+# --- Database ---
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# --- Docker ---
+.dockerignore
+
+# --- Celery ---
+celerybeat-schedule
+celerybeat.pid
+
+# --- Testing ---
+.pytest_cache/
+.coverage
+htmlcov/
+coverage/
+*.lcov
+
+# --- Local Dev / Testing ---
+tests/
+
+# --- Misc ---
+nul
