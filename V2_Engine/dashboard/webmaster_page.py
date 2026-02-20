@@ -3,21 +3,20 @@ Source 5 — Webmaster Dashboard (GSC + Bing)
 
 Provides:
     1. OAuth Redirect Trap (handles ?code=...&state=... callback)
-    2. Connect / Disconnect buttons (dynamic per provider)
-    3. Placeholder for future analysis tabs (GSC + Bing engines)
-
-OAuth credentials (Client ID / Secret) are managed globally via
-the "API Keys" expander in the sidebar (auth_manager V5).
+    2. 2-column credential UI — inline on the main panel (no sidebar dependency)
+       - Google: Client ID + Client Secret → OAuth flow → GSC property selectbox
+       - Bing:   API Key → Bing Webmaster API → verified site selectbox
+    3. Analysis tabs triggered by the selected domain dropdowns
 
 Called from app.py via:
     from V2_Engine.dashboard.webmaster_page import render_webmaster_page
     render_webmaster_page()
-
-Ported from: _archive/009-GSC-SAAS/app.py (refactored to BYOK pattern)
 """
-import os
-import logging
 
+import logging
+import os
+
+import requests
 import streamlit as st
 
 logger = logging.getLogger(__name__)
@@ -25,15 +24,21 @@ logger = logging.getLogger(__name__)
 # Allow HTTP redirect for localhost dev (Google OAuth requires this)
 os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
 
+# Redirect base — override in Zeabur Variables for production
+_REDIRECT_BASE = os.getenv("OAUTH_REDIRECT_BASE", "http://localhost:8501")
+
+
+# ===========================================================================
+#  MAIN ENTRY POINT
+# ===========================================================================
 
 def render_webmaster_page():
     """Main entry point — called by app.py when nav == 'Webmaster'."""
 
-    # Late imports to avoid circular / heavy import at module level
     from V2_Engine.saas_core.db.database import Database
     from V2_Engine.saas_core.auth.oauth_manager import OAuthManager
 
-    # ── Session guards ────────────────────────
+    # ── Session guards ──────────────────────────────────────────────────
     if "user_id" not in st.session_state:
         st.error("No user session. Please restart the app.")
         return
@@ -46,69 +51,208 @@ def render_webmaster_page():
     user_id: str = st.session_state["user_id"]
     oauth = OAuthManager(db, user_id)
 
-    # ==================================================================
-    # 1. OAUTH REDIRECT TRAP  (must be FIRST — before any UI)
-    # ==================================================================
+    # ── OAuth redirect trap (must run BEFORE any UI is drawn) ───────────
     _handle_oauth_callback(db, oauth, user_id)
 
-    # ==================================================================
-    # 2. PAGE HEADER
-    # ==================================================================
+    # ── Page header ─────────────────────────────────────────────────────
     st.header("Webmaster — SEO & GEO Analytics")
-    st.caption("Connect your Google Search Console and Bing Webmaster accounts to begin.")
+    st.caption(
+        "Enter your credentials below to connect Google Search Console "
+        "and Bing Webmaster, then select a verified property to run analysis."
+    )
 
-    # ==================================================================
-    # 3. PROVIDER CONNECTION STATUS + CONNECT / DISCONNECT
-    # ==================================================================
+    # ── 2-column credential UI ──────────────────────────────────────────
     col_google, col_bing = st.columns(2)
 
     with col_google:
-        _render_provider_section(oauth, "google", "Google Search Console")
+        _render_google_section(db, oauth, user_id)
 
     with col_bing:
-        _render_provider_section(oauth, "bing", "Bing Webmaster")
+        _render_bing_section(db, user_id)
 
     st.divider()
 
-    # ==================================================================
-    # 5. ANALYSIS PLACEHOLDER
-    # ==================================================================
-    google_connected = oauth.is_connected("google")
-    bing_connected = oauth.is_connected("bing")
+    # ── Analysis gate: require at least one selected domain ─────────────
+    google_site = st.session_state.get("selected_google_site")
+    bing_site = st.session_state.get("selected_bing_site")
 
-    if not google_connected and not bing_connected:
-        st.info(
-            "Connect at least one provider above to unlock analysis. "
-            "First add your OAuth Client ID and Secret via the **API Keys** panel in the sidebar, "
-            "then click the Sign In button here."
-        )
+    if not google_site and not bing_site:
+        st.info("Select a verified property from the dropdowns above to unlock analysis.")
         return
 
-    tab_gsc, tab_bing = st.tabs(["Google Search Console", "Bing Webmaster"])
+    # ── Analysis tabs ───────────────────────────────────────────────────
+    tab_gsc, tab_bing_tab = st.tabs(["Google Search Console", "Bing Webmaster"])
 
     with tab_gsc:
-        if google_connected:
-            st.success("Google Search Console is connected.")
+        if google_site:
+            st.success(f"Active property: `{google_site}`")
             st.info("GSC analysis engine will be wired in Phase D.")
         else:
-            st.info("Connect Google Search Console from above to begin.")
+            st.info("Connect Google Search Console above to begin.")
 
-    with tab_bing:
-        if bing_connected:
-            st.success("Bing Webmaster is connected.")
-            st.info("Bing GEO analysis engine will be wired in Phase D.")
+    with tab_bing_tab:
+        if bing_site:
+            st.success(f"Active site: `{bing_site}`")
+            st.info("Bing analysis engine will be wired in Phase D.")
         else:
-            st.info("Connect Bing Webmaster from above to begin.")
+            st.info("Connect Bing Webmaster above to begin.")
 
 
-# ======================================================================
+# ===========================================================================
+#  GOOGLE SECTION
+# ===========================================================================
+
+def _render_google_section(db, oauth, user_id: str):
+    """Credential form + OAuth flow + GSC property selectbox."""
+
+    st.subheader("Google Search Console")
+
+    # ── Credential inputs ────────────────────────────────────────────────
+    with st.expander(
+        "OAuth App Credentials",
+        expanded=not oauth.has_credentials("google"),
+    ):
+        g_id = st.text_input(
+            "Client ID",
+            key="wm_google_client_id",
+            placeholder="123456789-abc.apps.googleusercontent.com",
+        )
+        g_secret = st.text_input(
+            "Client Secret",
+            key="wm_google_client_secret",
+            type="password",
+            placeholder="GOCSPX-...",
+        )
+        if st.button("Save Google Credentials", key="wm_save_google"):
+            if g_id.strip() and g_secret.strip():
+                db.save_api_credentials(
+                    user_id, "google",
+                    g_id.strip(), g_secret.strip(),
+                )
+                st.success("Credentials saved.")
+                st.rerun()
+            else:
+                st.warning("Both Client ID and Client Secret are required.")
+
+    # ── Nothing to do without credentials ───────────────────────────────
+    if not oauth.has_credentials("google"):
+        st.info("Enter your Google OAuth credentials above to enable sign-in.")
+        return
+
+    # ── Connected: show property dropdown ────────────────────────────────
+    if oauth.is_connected("google"):
+        st.success("Connected")
+
+        # Fetch and cache verified properties
+        if "google_sites" not in st.session_state:
+            with st.spinner("Fetching verified properties..."):
+                st.session_state["google_sites"] = _fetch_gsc_sites(oauth)
+
+        sites = st.session_state.get("google_sites", [])
+
+        if sites:
+            st.selectbox(
+                "Verified Property",
+                options=sites,
+                key="selected_google_site",
+            )
+        else:
+            st.warning("No verified properties found in this account.")
+            if st.button("Retry", key="retry_gsc"):
+                st.session_state.pop("google_sites", None)
+                st.rerun()
+
+        if st.button("Disconnect Google", key="dc_google"):
+            oauth.disconnect("google")
+            st.session_state.pop("google_sites", None)
+            st.session_state.pop("selected_google_site", None)
+            st.rerun()
+
+    # ── Not connected: show Sign In button ───────────────────────────────
+    else:
+        st.warning("Not connected")
+        if st.button("Sign in with Google", key="cn_google", type="primary"):
+            try:
+                auth_url = oauth.get_google_auth_url()
+                st.markdown(f"[Authorize Google Search Console]({auth_url})")
+            except Exception as e:
+                st.error(f"Failed to generate auth URL: {e}")
+
+
+# ===========================================================================
+#  BING SECTION
+# ===========================================================================
+
+def _render_bing_section(db, user_id: str):
+    """API key form + Bing Webmaster site selectbox (no OAuth)."""
+
+    st.subheader("Bing Webmaster")
+
+    has_key = db.has_credential(user_id, "bing", "api_key")
+
+    # ── API key input ────────────────────────────────────────────────────
+    with st.expander("API Key", expanded=not has_key):
+        bing_key = st.text_input(
+            "Bing Webmaster API Key",
+            key="wm_bing_api_key",
+            type="password",
+            placeholder="Paste your Bing Webmaster API key here",
+        )
+        if st.button("Save Bing Credentials", key="wm_save_bing"):
+            if bing_key.strip():
+                db.save_credential(
+                    user_id, "bing", "api_key",
+                    {"api_key": bing_key.strip()},
+                )
+                st.session_state.pop("bing_sites", None)   # force re-fetch
+                st.success("Bing API key saved.")
+                st.rerun()
+            else:
+                st.warning("API key cannot be empty.")
+
+    # ── Nothing to do without a key ──────────────────────────────────────
+    if not has_key:
+        st.info("Enter your Bing API key above to begin.")
+        return
+
+    st.success("API Key configured")
+
+    # ── Fetch and cache verified sites ───────────────────────────────────
+    if "bing_sites" not in st.session_state:
+        cred = db.get_credential(user_id, "bing", "api_key")
+        api_key = (cred or {}).get("api_key", "")
+        with st.spinner("Fetching verified sites..."):
+            st.session_state["bing_sites"] = _fetch_bing_sites(api_key)
+
+    sites = st.session_state.get("bing_sites", [])
+
+    if sites:
+        st.selectbox(
+            "Verified Site",
+            options=sites,
+            key="selected_bing_site",
+        )
+    else:
+        st.warning("No verified sites found. Check your API key.")
+        if st.button("Retry", key="retry_bing"):
+            st.session_state.pop("bing_sites", None)
+            st.rerun()
+
+    if st.button("Remove Bing Key", key="dc_bing"):
+        db.delete_credential(user_id, "bing", "api_key")
+        st.session_state.pop("bing_sites", None)
+        st.session_state.pop("selected_bing_site", None)
+        st.rerun()
+
+
+# ===========================================================================
 #  PRIVATE HELPERS
-# ======================================================================
+# ===========================================================================
 
 def _handle_oauth_callback(db, oauth, user_id: str):
     """
-    The Redirect Trap — parse ?code=...&state=... from URL query params.
-    Routes to Google or Bing based on the stored state record in the DB.
+    OAuth Redirect Trap — parse ?code=...&state=... from URL query params.
+    Must run before any UI is drawn so the rerun is clean.
     """
     params = st.query_params
     code = params.get("code")
@@ -118,7 +262,6 @@ def _handle_oauth_callback(db, oauth, user_id: str):
         return
 
     try:
-        # Consume state to determine which provider this callback is for
         state_data = db.consume_oauth_state(state)
         if not state_data:
             st.error("OAuth callback failed: invalid or expired state token.")
@@ -129,15 +272,13 @@ def _handle_oauth_callback(db, oauth, user_id: str):
         callback_user = state_data["user_id"]
 
         if provider == "google":
-            # Re-save state so callback_google() can consume it internally
             db.save_oauth_state(state, callback_user, "google")
-            # Build the full callback URL that google-auth-oauthlib expects
-            redirect_uri = f"http://localhost:8501/?code={code}&state={state}"
+            redirect_uri = f"{_REDIRECT_BASE}/?code={code}&state={state}"
             oauth.callback_google(redirect_uri)
+            st.session_state.pop("google_sites", None)   # force site re-fetch
             st.success("Connected to Google Search Console!")
 
         elif provider == "bing":
-            # Re-save state so callback_bing() can consume it internally
             db.save_oauth_state(state, callback_user, "bing")
             oauth.callback_bing(code, state)
             st.success("Connected to Bing Webmaster!")
@@ -151,32 +292,41 @@ def _handle_oauth_callback(db, oauth, user_id: str):
         st.query_params.clear()
 
 
-def _render_provider_section(oauth, provider: str, display_name: str):
-    """Render connect/disconnect UI for a single provider."""
+def _fetch_gsc_sites(oauth) -> list[str]:
+    """
+    Fetch the user's verified properties from Google Search Console.
+    Returns a list of site URL strings, or [] on any failure.
+    """
+    try:
+        from googleapiclient.discovery import build
+        creds = oauth.google_get_credentials()
+        service = build("webmasters", "v3", credentials=creds)
+        response = service.sites().list().execute()
+        return [s["siteUrl"] for s in response.get("siteEntry", [])]
+    except Exception as e:
+        logger.warning(f"GSC site fetch failed: {e}")
+        return []
 
-    st.subheader(display_name)
-    connected = oauth.is_connected(provider)
-    has_creds = oauth.has_credentials(provider)
 
-    if connected:
-        st.success("Connected")
-        if st.button(f"Disconnect {display_name}", key=f"dc_{provider}"):
-            oauth.disconnect(provider)
-            # Clear cached site lists on disconnect
-            st.session_state.pop(f"{provider}_sites", None)
-            st.session_state.pop(f"selected_{provider}_site", None)
-            st.rerun()
-    elif has_creds:
-        st.warning("Not connected")
-        if st.button(f"Sign in with {display_name}", key=f"cn_{provider}", type="primary"):
-            try:
-                if provider == "google":
-                    auth_url = oauth.get_google_auth_url()
-                else:
-                    auth_url = oauth.get_bing_auth_url()
-                st.markdown(f"[Authorize {display_name}]({auth_url})")
-            except Exception as e:
-                st.error(f"Failed to generate auth URL: {e}")
-    else:
-        st.warning("No OAuth credentials configured")
-        st.caption("Add your Google/Bing Client ID and Secret via the API Keys panel in the sidebar.")
+def _fetch_bing_sites(api_key: str) -> list[str]:
+    """
+    Fetch verified sites from the Bing Webmaster API using an API key.
+    Returns a list of site URL strings, or [] on any failure.
+    """
+    if not api_key:
+        return []
+    try:
+        url = "https://api.webmaster.live.com/webmaster/api.svc/json/GetUserSites"
+        resp = requests.get(
+            url,
+            params={"apikey": api_key},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            return [s["Url"] for s in data.get("d", [])]
+        logger.warning(f"Bing Webmaster API returned {resp.status_code}: {resp.text[:200]}")
+        return []
+    except Exception as e:
+        logger.warning(f"Bing site fetch failed: {e}")
+        return []
