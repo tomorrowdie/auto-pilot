@@ -18,13 +18,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application source
 COPY . .
 
-# Streamlit listens on 8501
-EXPOSE 8501
+# Streamlit listens on 8080 (Zeabur default)
+EXPOSE 8080
 
 # Streamlit config: disable the browser-open prompt and CORS check
 ENV STREAMLIT_SERVER_HEADLESS=true \
     STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
 
 CMD ["streamlit", "run", "V2_Engine/dashboard/app.py", \
-     "--server.port=8501", \
+     "--server.port=8080", \
      "--server.address=0.0.0.0"]
