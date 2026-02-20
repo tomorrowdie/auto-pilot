@@ -8,6 +8,10 @@ Provides:
        - Bing:   API Key → Bing Webmaster API → verified site selectbox
     3. Analysis tabs triggered by the selected domain dropdowns
 
+Redirect URI is controlled by OAUTH_REDIRECT_BASE env var:
+    - Local dev:   http://localhost:8501  (default, no env var needed)
+    - Production:  https://auto-pilot.zeabur.app  (set in Zeabur Variables)
+
 Called from app.py via:
     from V2_Engine.dashboard.webmaster_page import render_webmaster_page
     render_webmaster_page()
@@ -21,10 +25,10 @@ import streamlit as st
 
 logger = logging.getLogger(__name__)
 
-# Allow HTTP redirect for localhost dev (Google OAuth requires this)
+# Allow HTTP redirects for localhost dev (Google OAuth requires HTTPS in prod)
 os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
 
-# Redirect base — override in Zeabur Variables for production
+# Single source of truth for the redirect base — read once at import time
 _REDIRECT_BASE = os.getenv("OAUTH_REDIRECT_BASE", "http://localhost:8501")
 
 
@@ -107,11 +111,21 @@ def _render_google_section(db, oauth, user_id: str):
 
     st.subheader("Google Search Console")
 
+    has_creds = oauth.has_credentials("google")
+
+    # ── Pre-populate Client ID from DB into session state ────────────────
+    # This runs only when the key doesn't exist (fresh page load / first visit).
+    # Prevents the field from blanking out after a save+rerun cycle.
+    if "wm_google_client_id" not in st.session_state and has_creds:
+        saved = db.get_api_credentials(user_id, "google") or {}
+        st.session_state["wm_google_client_id"] = saved.get("client_id", "")
+
     # ── Credential inputs ────────────────────────────────────────────────
-    with st.expander(
-        "OAuth App Credentials",
-        expanded=not oauth.has_credentials("google"),
-    ):
+    expander_label = (
+        "OAuth App Credentials — ✅ Saved" if has_creds
+        else "OAuth App Credentials — ⚠️ Not configured"
+    )
+    with st.expander(expander_label, expanded=not has_creds):
         g_id = st.text_input(
             "Client ID",
             key="wm_google_client_id",
@@ -121,18 +135,35 @@ def _render_google_section(db, oauth, user_id: str):
             "Client Secret",
             key="wm_google_client_secret",
             type="password",
-            placeholder="GOCSPX-...",
+            placeholder=(
+                "Leave blank to keep existing secret"
+                if has_creds else "GOCSPX-..."
+            ),
         )
         if st.button("Save Google Credentials", key="wm_save_google"):
-            if g_id.strip() and g_secret.strip():
-                db.save_api_credentials(
-                    user_id, "google",
-                    g_id.strip(), g_secret.strip(),
-                )
-                st.success("Credentials saved.")
-                st.rerun()
+            if not g_id.strip():
+                st.warning("Client ID is required.")
             else:
-                st.warning("Both Client ID and Client Secret are required.")
+                # If secret is blank and credentials already exist, keep the
+                # existing secret rather than overwriting with an empty string.
+                if g_secret.strip():
+                    secret_to_save = g_secret.strip()
+                elif has_creds:
+                    existing = db.get_api_credentials(user_id, "google") or {}
+                    secret_to_save = existing.get("client_secret", "")
+                else:
+                    secret_to_save = ""
+
+                if not secret_to_save:
+                    st.warning("Client Secret is required for a new credential.")
+                else:
+                    db.save_api_credentials(
+                        user_id, "google",
+                        g_id.strip(), secret_to_save,
+                        redirect_uri=_REDIRECT_BASE,   # ← persisted to DB
+                    )
+                    st.toast("Google credentials saved.", icon="✅")
+                    st.rerun()
 
     # ── Nothing to do without credentials ───────────────────────────────
     if not oauth.has_credentials("google"):
@@ -143,7 +174,7 @@ def _render_google_section(db, oauth, user_id: str):
     if oauth.is_connected("google"):
         st.success("Connected")
 
-        # Fetch and cache verified properties
+        # Fetch and cache verified properties (avoid hitting API every render)
         if "google_sites" not in st.session_state:
             with st.spinner("Fetching verified properties..."):
                 st.session_state["google_sites"] = _fetch_gsc_sites(oauth)
@@ -173,7 +204,9 @@ def _render_google_section(db, oauth, user_id: str):
         st.warning("Not connected")
         if st.button("Sign in with Google", key="cn_google", type="primary"):
             try:
-                auth_url = oauth.get_google_auth_url()
+                # Pass _REDIRECT_BASE explicitly so auth URL and callback
+                # flow both use the same URI (fixes token exchange mismatch).
+                auth_url = oauth.get_google_auth_url(redirect_uri=_REDIRECT_BASE)
                 st.markdown(f"[Authorize Google Search Console]({auth_url})")
             except Exception as e:
                 st.error(f"Failed to generate auth URL: {e}")
@@ -191,12 +224,19 @@ def _render_bing_section(db, user_id: str):
     has_key = db.has_credential(user_id, "bing", "api_key")
 
     # ── API key input ────────────────────────────────────────────────────
-    with st.expander("API Key", expanded=not has_key):
+    expander_label = (
+        "API Key — ✅ Saved" if has_key
+        else "API Key — ⚠️ Not configured"
+    )
+    with st.expander(expander_label, expanded=not has_key):
         bing_key = st.text_input(
             "Bing Webmaster API Key",
             key="wm_bing_api_key",
             type="password",
-            placeholder="Paste your Bing Webmaster API key here",
+            placeholder=(
+                "Leave blank to keep existing key"
+                if has_key else "Paste your Bing Webmaster API key here"
+            ),
         )
         if st.button("Save Bing Credentials", key="wm_save_bing"):
             if bing_key.strip():
@@ -205,8 +245,11 @@ def _render_bing_section(db, user_id: str):
                     {"api_key": bing_key.strip()},
                 )
                 st.session_state.pop("bing_sites", None)   # force re-fetch
-                st.success("Bing API key saved.")
+                st.toast("Bing API key saved.", icon="✅")
                 st.rerun()
+            elif has_key:
+                # No new key entered and one already exists — nothing to do
+                st.info("Existing key is still active.")
             else:
                 st.warning("API key cannot be empty.")
 
@@ -217,7 +260,7 @@ def _render_bing_section(db, user_id: str):
 
     st.success("API Key configured")
 
-    # ── Fetch and cache verified sites ───────────────────────────────────
+    # ── Fetch and cache verified sites (Bing live API, not localhost) ────
     if "bing_sites" not in st.session_state:
         cred = db.get_credential(user_id, "bing", "api_key")
         api_key = (cred or {}).get("api_key", "")
@@ -252,7 +295,10 @@ def _render_bing_section(db, user_id: str):
 def _handle_oauth_callback(db, oauth, user_id: str):
     """
     OAuth Redirect Trap — parse ?code=...&state=... from URL query params.
-    Must run before any UI is drawn so the rerun is clean.
+    Must run before any UI is drawn so the rerun lands on a clean page.
+
+    The redirect_uri passed to callback_google must match the one used
+    when the auth URL was generated (both come from _REDIRECT_BASE).
     """
     params = st.query_params
     code = params.get("code")
@@ -272,7 +318,10 @@ def _handle_oauth_callback(db, oauth, user_id: str):
         callback_user = state_data["user_id"]
 
         if provider == "google":
+            # Re-save state so callback_google() can re-validate it internally
             db.save_oauth_state(state, callback_user, "google")
+            # Reconstruct the exact redirect URI Google sent the user back to.
+            # Must use _REDIRECT_BASE so it matches the auth URL that was generated.
             redirect_uri = f"{_REDIRECT_BASE}/?code={code}&state={state}"
             oauth.callback_google(redirect_uri)
             st.session_state.pop("google_sites", None)   # force site re-fetch
@@ -310,22 +359,21 @@ def _fetch_gsc_sites(oauth) -> list[str]:
 
 def _fetch_bing_sites(api_key: str) -> list[str]:
     """
-    Fetch verified sites from the Bing Webmaster API using an API key.
+    Fetch verified sites from the Bing Webmaster live API using an API key.
+    Endpoint: https://api.webmaster.live.com/webmaster/api.svc/json/GetUserSites
     Returns a list of site URL strings, or [] on any failure.
     """
     if not api_key:
         return []
     try:
         url = "https://api.webmaster.live.com/webmaster/api.svc/json/GetUserSites"
-        resp = requests.get(
-            url,
-            params={"apikey": api_key},
-            timeout=10,
-        )
+        resp = requests.get(url, params={"apikey": api_key}, timeout=10)
         if resp.status_code == 200:
             data = resp.json()
             return [s["Url"] for s in data.get("d", [])]
-        logger.warning(f"Bing Webmaster API returned {resp.status_code}: {resp.text[:200]}")
+        logger.warning(
+            f"Bing Webmaster API returned {resp.status_code}: {resp.text[:200]}"
+        )
         return []
     except Exception as e:
         logger.warning(f"Bing site fetch failed: {e}")

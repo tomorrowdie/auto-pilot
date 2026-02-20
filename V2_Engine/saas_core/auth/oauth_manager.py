@@ -9,6 +9,7 @@ CRITICAL CHANGE from 009: No .env lookups. All client credentials come from
 
 Ported from: _archive/009-GSC-SAAS/auth/oauth.py
 """
+import os
 import secrets
 import time
 import logging
@@ -29,7 +30,7 @@ _BING_TOKEN_URL = "https://www.bing.com/webmasters/oauth/token"
 _GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/webmasters.readonly",
 ]
-_DEFAULT_REDIRECT_URI = "http://localhost:8501"
+_DEFAULT_REDIRECT_URI = os.getenv("OAUTH_REDIRECT_BASE", "http://localhost:8501")
 
 
 class OAuthManager:
