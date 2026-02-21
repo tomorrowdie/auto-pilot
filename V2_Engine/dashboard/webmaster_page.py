@@ -60,6 +60,16 @@ def render_webmaster_page():
     # ── OAuth redirect trap (must run BEFORE any UI is drawn) ───────────
     _handle_oauth_callback(db, oauth, user_id)
 
+    # ── Pre-warm site caches on fresh session (Issue 1C) ────────────────
+    # On browser refresh session_state is cleared, but DB credentials survive.
+    # Re-fetch site lists silently so the dropdowns appear immediately.
+    if oauth.is_connected("google") and "google_sites" not in st.session_state:
+        st.session_state["google_sites"] = _fetch_bing_sites_cached(oauth, "google")
+    _bing_cred = db.get_credential(user_id, "bing", "api_key")
+    _bing_key_prewarm = (_bing_cred or {}).get("api_key", "")
+    if _bing_key_prewarm and "bing_sites" not in st.session_state:
+        st.session_state["bing_sites"], _ = _fetch_bing_sites(_bing_key_prewarm)
+
     # ── Page header ─────────────────────────────────────────────────────
     st.header("Webmaster — SEO & GEO Analytics")
     st.caption(
@@ -260,12 +270,17 @@ def _render_bing_section(db, user_id: str):
 
     st.success("API Key configured")
 
-    # ── Fetch and cache verified sites (Bing live API, not localhost) ────
+    # ── Fetch and cache verified sites ────────────────────────────────────
     if "bing_sites" not in st.session_state:
         cred = db.get_credential(user_id, "bing", "api_key")
         api_key = (cred or {}).get("api_key", "")
         with st.spinner("Fetching verified sites..."):
-            st.session_state["bing_sites"] = _fetch_bing_sites(api_key)
+            fetched, fetch_err = _fetch_bing_sites(api_key)
+            st.session_state["bing_sites"] = fetched
+            if fetch_err:
+                st.session_state["bing_fetch_error"] = fetch_err
+            else:
+                st.session_state.pop("bing_fetch_error", None)
 
     sites = st.session_state.get("bing_sites", [])
 
@@ -276,9 +291,14 @@ def _render_bing_section(db, user_id: str):
             key="selected_bing_site",
         )
     else:
-        st.warning("No verified sites found. Check your API key.")
+        fetch_err = st.session_state.get("bing_fetch_error", "")
+        if fetch_err:
+            st.error(f"Bing API error — check your key and try again:\n\n```\n{fetch_err}\n```")
+        else:
+            st.warning("No verified sites found. Check your API key.")
         if st.button("Retry", key="retry_bing"):
             st.session_state.pop("bing_sites", None)
+            st.session_state.pop("bing_fetch_error", None)
             st.rerun()
 
     if st.button("Remove Bing Key", key="dc_bing"):
@@ -357,26 +377,63 @@ def _fetch_gsc_sites(oauth) -> list[str]:
         return []
 
 
-def _fetch_bing_sites(api_key: str) -> list[str]:
+def _fetch_bing_sites(api_key: str) -> tuple[list[str], str]:
     """
-    Fetch verified sites from the Bing Webmaster live API using an API key.
-    Endpoint: https://api.webmaster.live.com/webmaster/api.svc/json/GetUserSites
-    Returns a list of site URL strings, or [] on any failure.
+    Fetch verified sites from the Bing Webmaster API.
+
+    Tries endpoints in order (most current first):
+      1. ssl.bing.com — key as query param
+      2. api.webmaster.bing.com — key as query param
+      3. ssl.bing.com — key as Authorization Bearer header
+      4. api.webmaster.live.com — legacy fallback
+
+    Returns:
+        (sites, error_msg) — sites is [] on failure; error_msg is "" on success.
     """
     if not api_key:
-        return []
+        return [], "No API key provided."
+
+    _ENDPOINTS = [
+        ("https://ssl.bing.com/webmaster/api.svc/json/GetUserSites",
+         {"apikey": api_key}, {}),
+        ("https://api.webmaster.bing.com/webmaster/api.svc/json/GetUserSites",
+         {"apikey": api_key}, {}),
+        ("https://ssl.bing.com/webmaster/api.svc/json/GetUserSites",
+         {}, {"Authorization": f"Bearer {api_key}"}),
+        ("https://api.webmaster.live.com/webmaster/api.svc/json/GetUserSites",
+         {"apikey": api_key}, {}),
+    ]
+
+    last_error = ""
+    for url, params, headers in _ENDPOINTS:
+        try:
+            resp = requests.get(url, params=params, headers=headers, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                sites = [s["Url"] for s in data.get("d", []) if "Url" in s]
+                if sites:
+                    logger.info(f"Bing sites fetched from {url}: {len(sites)} sites")
+                    return sites, ""
+                # 200 but empty — not an error, user just has no verified sites
+                return [], ""
+            last_error = (
+                f"HTTP {resp.status_code} from {url}\n"
+                f"Response: {resp.text[:500]}"
+            )
+            logger.warning(f"Bing endpoint {url}: {last_error}")
+        except Exception as exc:
+            last_error = f"Connection error to {url}: {exc}"
+            logger.warning(last_error)
+
+    return [], last_error
+
+
+def _fetch_bing_sites_cached(oauth, provider: str) -> list[str]:
+    """Thin wrapper — fetches GSC sites via the oauth object (pre-warm helper)."""
     try:
-        url = "https://api.webmaster.live.com/webmaster/api.svc/json/GetUserSites"
-        resp = requests.get(url, params={"apikey": api_key}, timeout=10)
-        if resp.status_code == 200:
-            data = resp.json()
-            return [s["Url"] for s in data.get("d", [])]
-        logger.warning(
-            f"Bing Webmaster API returned {resp.status_code}: {resp.text[:200]}"
-        )
-        return []
+        return _fetch_gsc_sites(oauth)
     except Exception as e:
-        logger.warning(f"Bing site fetch failed: {e}")
+        logger.warning(f"Pre-warm GSC fetch failed: {e}")
         return []
 
 
@@ -414,7 +471,7 @@ def _render_gsc_analysis_tab(db, oauth, user_id: str, google_site: str):
     ai_key = f"gsc_ai_{google_site}_{window_days}"
 
     if run_btn:
-        with st.spinner("Fetching GSC data from Google Search Console..."):
+        with st.spinner("Fetching data and generating AI report (30–60 s)..."):
             try:
                 from googleapiclient.discovery import build
                 creds = oauth.google_get_credentials()
@@ -422,9 +479,26 @@ def _render_gsc_analysis_tab(db, oauth, user_id: str, google_site: str):
                 rows = fetch_gsc_comparison(service, google_site, window_days)
                 processed = process_gsc_rows(rows)
                 st.session_state[result_key] = processed
-                st.session_state.pop(ai_key, None)   # clear stale AI report
+
+                # Auto-generate AI report immediately after fetch
+                low_traffic_now = is_low_traffic(processed)
+                api_key_now = auth_manager.get_api_key(user_id, provider)
+                if api_key_now or provider == "local_ollama":
+                    if low_traffic_now:
+                        suggestions = generate_content_suggestions(
+                            processed, provider, api_key_now or "", model, google_site
+                        )
+                        st.session_state[ai_key] = {"type": "content", "data": suggestions}
+                    else:
+                        gsc_report_text = generate_gsc_report(
+                            processed, provider, api_key_now or "", model, google_site
+                        )
+                        st.session_state[ai_key] = {"type": "report", "data": gsc_report_text}
+                else:
+                    st.session_state.pop(ai_key, None)
+
             except Exception as exc:
-                st.error(f"GSC fetch failed: {exc}")
+                st.error(f"GSC analysis failed: {exc}")
                 return
 
     processed = st.session_state.get(result_key)
@@ -521,22 +595,22 @@ def _render_gsc_analysis_tab(db, oauth, user_id: str, google_site: str):
             st.info("No page 2 opportunities found.")
 
     with t_ai:
-        if st.button("Generate AI Report", key="gen_gsc_ai", type="primary"):
+        if st.button("Regenerate AI Report", key="gen_gsc_ai"):
             api_key = auth_manager.get_api_key(user_id, provider)
             if not api_key and provider != "local_ollama":
                 st.error(f"No API key stored for '{provider}'. Add it in the sidebar.")
             else:
-                with st.spinner("Generating AI report..."):
+                with st.spinner("Regenerating AI report..."):
                     if low_traffic:
                         suggestions = generate_content_suggestions(
                             processed, provider, api_key or "", model, google_site
                         )
                         st.session_state[ai_key] = {"type": "content", "data": suggestions}
                     else:
-                        report = generate_gsc_report(
+                        gsc_report_text = generate_gsc_report(
                             processed, provider, api_key or "", model, google_site
                         )
-                        st.session_state[ai_key] = {"type": "report", "data": report}
+                        st.session_state[ai_key] = {"type": "report", "data": gsc_report_text}
 
         ai_result = st.session_state.get(ai_key)
         if ai_result:
@@ -559,7 +633,7 @@ def _render_gsc_analysis_tab(db, oauth, user_id: str, google_site: str):
                         window_days,
                     )
         else:
-            st.info("Click **Generate AI Report** to produce an LLM-powered SEO analysis.")
+            st.info("Run analysis above to auto-generate the AI report.")
 
 
 # ===========================================================================
@@ -597,16 +671,26 @@ def _render_bing_analysis_tab(db, user_id: str, bing_site: str):
         if not bing_api_key:
             st.error("Bing API key not found. Please save it above.")
             return
-        with st.spinner("Fetching Bing Webmaster data..."):
+        with st.spinner("Fetching data and generating AI report (30–60 s)..."):
             try:
                 query_rows = fetch_bing_query_stats(bing_api_key, bing_site)
                 page_rows = fetch_bing_page_stats(bing_api_key, bing_site)
                 report = build_bing_report(query_rows, page_rows)
                 strategy = categorize_bing_strategy(report)
                 st.session_state[result_key] = {"report": report, "strategy": strategy}
-                st.session_state.pop(ai_key, None)
+
+                # Auto-generate AI report immediately after fetch
+                api_key_now = auth_manager.get_api_key(user_id, provider)
+                if api_key_now or provider == "local_ollama":
+                    bing_ai_text = generate_bing_report(
+                        strategy, provider, api_key_now or "", model, bing_site
+                    )
+                    st.session_state[ai_key] = bing_ai_text
+                else:
+                    st.session_state.pop(ai_key, None)
+
             except Exception as exc:
-                st.error(f"Bing fetch failed: {exc}")
+                st.error(f"Bing analysis failed: {exc}")
                 return
 
     cached = st.session_state.get(result_key)
@@ -668,12 +752,12 @@ def _render_bing_analysis_tab(db, user_id: str, bing_site: str):
             st.info("No early signals detected.")
 
     with t_ai:
-        if st.button("Generate AI Report", key="gen_bing_ai", type="primary"):
+        if st.button("Regenerate AI Report", key="gen_bing_ai"):
             api_key = auth_manager.get_api_key(user_id, provider)
             if not api_key and provider != "local_ollama":
                 st.error(f"No API key stored for '{provider}'. Add it in the sidebar.")
             else:
-                with st.spinner("Generating Bing AI report..."):
+                with st.spinner("Regenerating Bing AI report..."):
                     ai_report = generate_bing_report(
                         strategy, provider, api_key or "", model, bing_site
                     )
@@ -683,9 +767,9 @@ def _render_bing_analysis_tab(db, user_id: str, bing_site: str):
         if ai_report:
             st.markdown(ai_report)
             if st.button("Save to Knowledge Base", key="bing_kb_save"):
-                _save_bing_to_kb(strategy, ai_report, bing_site)
+                _save_bing_to_kb(strategy, report, ai_report, bing_site)
         else:
-            st.info("Click **Generate AI Report** to produce an LLM-powered Bing analysis.")
+            st.info("Run analysis above to auto-generate the AI report.")
 
 
 # ===========================================================================
@@ -693,7 +777,11 @@ def _render_bing_analysis_tab(db, user_id: str, bing_site: str):
 # ===========================================================================
 
 def _save_gsc_to_kb(processed: dict, ai_report: str, site_url: str, window_days: int):
-    """Twin-File Protocol: save GSC result to 5_webmaster/ subfolder."""
+    """Triple-File Protocol: save GSC result to 5_webmaster/ subfolder.
+
+    Produces: {filename}.md  +  {filename}.csv  +  {filename}.json
+    The .json file contains the full processed dict for Source 6 ingestion.
+    """
     from V2_Engine.knowledge_base.manager import KnowledgeManager
 
     rows = []
@@ -719,12 +807,17 @@ def _save_gsc_to_kb(processed: dict, ai_report: str, site_url: str, window_days:
         filename=filename,
         content=ai_report,
         dataframe=df if not df.empty else None,
+        raw_json=json.dumps(processed, indent=2, default=str),
     )
-    st.success(f"Saved to Knowledge Base: `{filename}`")
+    st.success(f"Saved to Knowledge Base: `{filename}` (.md + .csv + .json)")
 
 
-def _save_bing_to_kb(strategy: dict, ai_report: str, site_url: str):
-    """Twin-File Protocol: save Bing result to 5_webmaster/ subfolder."""
+def _save_bing_to_kb(strategy: dict, report: dict, ai_report: str, site_url: str):
+    """Triple-File Protocol: save Bing result to 5_webmaster/ subfolder.
+
+    Produces: {filename}.md  +  {filename}.csv  +  {filename}.json
+    The .json file contains full report + strategy dicts for Source 6 ingestion.
+    """
     from V2_Engine.knowledge_base.manager import KnowledgeManager
 
     rows = (
@@ -745,5 +838,6 @@ def _save_bing_to_kb(strategy: dict, ai_report: str, site_url: str):
         filename=filename,
         content=ai_report,
         dataframe=df if not df.empty else None,
+        raw_json=json.dumps({"report": report, "strategy": strategy}, indent=2, default=str),
     )
-    st.success(f"Saved to Knowledge Base: `{filename}`")
+    st.success(f"Saved to Knowledge Base: `{filename}` (.md + .csv + .json)")

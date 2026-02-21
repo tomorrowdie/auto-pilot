@@ -56,6 +56,22 @@ kb = KnowledgeManager()
 db = Database()
 
 # ---------------------------------------------------------------------------
+# Security Warning — Ephemeral Encryption Key
+# ---------------------------------------------------------------------------
+# If TOKEN_ENC_KEY is not set as a persistent env var, the database module
+# auto-generates a temporary key. On Zeabur (or any container host), this
+# means stored credentials become permanently unreadable after every restart.
+from V2_Engine.saas_core.db import database as _db_module
+if _db_module.token_key_is_ephemeral:
+    st.warning(
+        "**Security Warning:** `TOKEN_ENC_KEY` is not set as a persistent environment variable. "
+        "A temporary encryption key was generated — all stored API keys and OAuth credentials "
+        "will be lost when the app restarts. "
+        "Set `TOKEN_ENC_KEY` in your Zeabur environment variables panel to fix this.",
+        icon="⚠️",
+    )
+
+# ---------------------------------------------------------------------------
 # Dev Mode — Auto-Login
 # ---------------------------------------------------------------------------
 if "user_id" not in st.session_state:

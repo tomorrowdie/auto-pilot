@@ -21,26 +21,40 @@ logger = logging.getLogger(__name__)
 
 _SCHEMA_PATH = Path(__file__).parent / "schema.sql"
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]   # 008-Auto-Pilot/
-_DEFAULT_DB_PATH = str(_PROJECT_ROOT / "data" / "saas_user_data.db")
+
+# DB_PATH env var lets Zeabur (or any host) mount a persistent volume.
+# e.g. set DB_PATH=/data/saas_user_data.db and mount a volume at /data.
+_DEFAULT_DB_PATH = os.environ.get(
+    "DB_PATH",
+    str(_PROJECT_ROOT / "data" / "saas_user_data.db"),
+)
+
+# Set to True when TOKEN_ENC_KEY is missing and a temp key was auto-generated.
+# app.py reads this flag to surface a visible warning in the Streamlit UI.
+token_key_is_ephemeral: bool = False
 
 
 def _load_fernet():
     """Load Fernet from env. Auto-generates + writes key if missing."""
+    global token_key_is_ephemeral
     key = os.environ.get("TOKEN_ENC_KEY", "")
     if not key:
         try:
             from cryptography.fernet import Fernet
             new_key = Fernet.generate_key().decode()
             os.environ["TOKEN_ENC_KEY"] = new_key
+            token_key_is_ephemeral = True   # signal to UI layer
+
             env_path = _PROJECT_ROOT / ".env"
             if env_path.exists():
                 with open(env_path, "a", encoding="utf-8") as f:
                     f.write(f"\nTOKEN_ENC_KEY={new_key}\n")
                 logger.info("TOKEN_ENC_KEY auto-generated and written to .env")
             else:
-                logger.warning(
+                logger.error(
                     "TOKEN_ENC_KEY not set and no .env found. "
-                    "Key is runtime-only and will change on restart."
+                    "A temporary key was generated — ALL STORED CREDENTIALS WILL BE "
+                    "LOST ON RESTART. Set TOKEN_ENC_KEY as a persistent environment variable."
                 )
             return Fernet(new_key.encode())
         except ImportError:

@@ -89,25 +89,35 @@ class KnowledgeManager:
         filename: str,
         content: str,
         dataframe=None,
+        raw_json: str | None = None,
     ) -> str:
         """
         Save a Markdown string to storage/<subfolder>/<filename>.
 
-        Twin-File Protocol: if a pandas DataFrame is provided, a CSV file
-        is saved alongside the MD file with the same base name.
+        Triple-File Protocol (when both dataframe and raw_json are provided):
+            {filename}.md   — Human-readable AI report
+            {filename}.csv  — Tabular keyword/signal data (paired with MD)
+            {filename}.json — Complete raw structured data (for Source 6 ingestion)
 
         Args:
             subfolder: Target subfolder inside storage/ (created if missing).
-                       e.g. '0_catalog_insight', '1_keyword_traffic'.
-            filename:  File name (e.g. 'Baby_Teether_Strategy_2026-02-08.md').
+                       e.g. '0_catalog_insight', '5_webmaster'.
+            filename:  File name WITHOUT extension (e.g. 'site_gsc_7d_2026-02-21').
+                       The .md suffix is added automatically if missing.
             content:   Pre-formatted Markdown string.
             dataframe: Optional pandas DataFrame to save as paired CSV.
+            raw_json:  Optional JSON string to save as paired .json file.
+                       Pass json.dumps(full_data_dict, indent=2, default=str).
 
         Returns:
-            The filename that was written.
+            The base filename that was written (with .md extension).
         """
         dest_dir = os.path.join(_STORAGE_DIR, subfolder)
         os.makedirs(dest_dir, exist_ok=True)
+
+        # Normalise filename — always ends in .md
+        if not filename.endswith(".md"):
+            filename = filename + ".md"
 
         # Save Markdown
         filepath = os.path.join(dest_dir, filename)
@@ -119,6 +129,13 @@ class KnowledgeManager:
             csv_filename = filename.replace(".md", ".csv")
             csv_path = os.path.join(dest_dir, csv_filename)
             dataframe.to_csv(csv_path, index=False)
+
+        # Triple-File Protocol: save raw JSON for downstream consumers (Source 6)
+        if raw_json is not None:
+            json_filename = filename.replace(".md", ".json")
+            json_path = os.path.join(dest_dir, json_filename)
+            with open(json_path, "w", encoding="utf-8") as f:
+                f.write(raw_json)
 
         return filename
 
