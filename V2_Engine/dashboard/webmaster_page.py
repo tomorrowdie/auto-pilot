@@ -16,9 +16,12 @@ Called from app.py via:
     render_webmaster_page()
 """
 
+import json
 import logging
 import os
+from datetime import date
 
+import pandas as pd
 import requests
 import streamlit as st
 
@@ -88,15 +91,13 @@ def render_webmaster_page():
 
     with tab_gsc:
         if google_site:
-            st.success(f"Active property: `{google_site}`")
-            st.info("GSC analysis engine will be wired in Phase D.")
+            _render_gsc_analysis_tab(db, oauth, user_id, google_site)
         else:
             st.info("Connect Google Search Console above to begin.")
 
     with tab_bing_tab:
         if bing_site:
-            st.success(f"Active site: `{bing_site}`")
-            st.info("Bing analysis engine will be wired in Phase D.")
+            _render_bing_analysis_tab(db, user_id, bing_site)
         else:
             st.info("Connect Bing Webmaster above to begin.")
 
@@ -377,3 +378,372 @@ def _fetch_bing_sites(api_key: str) -> list[str]:
     except Exception as e:
         logger.warning(f"Bing site fetch failed: {e}")
         return []
+
+
+# ===========================================================================
+#  GSC ANALYSIS TAB
+# ===========================================================================
+
+def _render_gsc_analysis_tab(db, oauth, user_id: str, google_site: str):
+    """Full GSC analysis UI: period selector → run → 5 sub-tabs + KB save."""
+    from V2_Engine.saas_core.auth import auth_manager
+    from V2_Engine.processors.source_5_webmaster.gsc_processor import (
+        fetch_gsc_comparison, process_gsc_rows, is_low_traffic,
+    )
+    from V2_Engine.processors.source_5_webmaster.webmaster_analyzer import (
+        generate_gsc_report, generate_content_suggestions,
+    )
+
+    st.success(f"Active property: `{google_site}`")
+
+    # ── Controls row ─────────────────────────────────────────────────────
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c1:
+        window_days = st.radio(
+            "Comparison window", [7, 28], horizontal=True, key="gsc_window_days"
+        )
+    with c2:
+        provider, model = auth_manager.render_tab_model_selector(
+            user_id, "webmaster_gsc"
+        )
+    with c3:
+        run_btn = st.button("Run GSC Analysis", type="primary", key="run_gsc")
+
+    # ── Run / cache ───────────────────────────────────────────────────────
+    result_key = f"gsc_result_{google_site}_{window_days}"
+    ai_key = f"gsc_ai_{google_site}_{window_days}"
+
+    if run_btn:
+        with st.spinner("Fetching GSC data from Google Search Console..."):
+            try:
+                from googleapiclient.discovery import build
+                creds = oauth.google_get_credentials()
+                service = build("webmasters", "v3", credentials=creds)
+                rows = fetch_gsc_comparison(service, google_site, window_days)
+                processed = process_gsc_rows(rows)
+                st.session_state[result_key] = processed
+                st.session_state.pop(ai_key, None)   # clear stale AI report
+            except Exception as exc:
+                st.error(f"GSC fetch failed: {exc}")
+                return
+
+    processed = st.session_state.get(result_key)
+    if processed is None:
+        st.info("Click **Run GSC Analysis** to fetch data.")
+        return
+
+    summary = processed["summary"]
+    low_traffic = is_low_traffic(processed)
+
+    # ── Sub-tabs ──────────────────────────────────────────────────────────
+    t_sum, t_rise, t_new, t_p2, t_ai = st.tabs(
+        ["Summary", "Rising / Declining", "New / Lost", "Page 2", "AI Report"]
+    )
+
+    with t_sum:
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Impressions (A)", summary["total_impr_a"],
+                    delta=summary["total_impr_a"] - summary["total_impr_b"])
+        col2.metric("Clicks (A)", summary["total_clicks_a"],
+                    delta=summary["total_clicks_a"] - summary["total_clicks_b"])
+        col3.metric("New Keywords", summary["new_keyword_count"])
+        col4.metric("Lost Keywords", summary["lost_keyword_count"])
+
+        c5, c6, c7 = st.columns(3)
+        c5.metric("Rising", summary["rising_keyword_count"])
+        c6.metric("Declining", summary["declining_keyword_count"])
+        c7.metric("Page 2 Opps", summary["page_two_opportunities_count"])
+
+        st.caption(
+            f"Period A: {summary['range_a'].get('startDate')} → "
+            f"{summary['range_a'].get('endDate')}  |  "
+            f"Period B: {summary['range_b'].get('startDate')} → "
+            f"{summary['range_b'].get('endDate')}"
+        )
+        if low_traffic:
+            st.warning(
+                "Low traffic detected (< 100 impressions or 0 new keywords). "
+                "AI report will generate **Content Suggestions** instead of a full SEO analysis."
+            )
+
+    with t_rise:
+        rising = processed.get("rising_keywords", [])
+        declining = processed.get("declining_keywords", [])
+
+        st.subheader("Rising Keywords")
+        if rising:
+            cols = [c for c in ["query", "total_impr_a", "total_impr_b", "impr_diff",
+                                 "total_clicks_a", "avg_pos_a", "pos_diff"] if c in pd.DataFrame(rising).columns]
+            st.dataframe(pd.DataFrame(rising)[cols].head(20), use_container_width=True)
+        else:
+            st.info("No rising keywords in this period.")
+
+        st.subheader("Declining Keywords")
+        if declining:
+            cols = [c for c in ["query", "total_impr_a", "total_impr_b", "impr_diff",
+                                 "total_clicks_a", "avg_pos_a", "pos_diff"] if c in pd.DataFrame(declining).columns]
+            st.dataframe(pd.DataFrame(declining)[cols].head(20), use_container_width=True)
+        else:
+            st.info("No declining keywords in this period.")
+
+    with t_new:
+        new_kw = processed.get("new_keywords", [])
+        lost_kw = processed.get("lost_keywords", [])
+
+        st.subheader("New Keywords")
+        if new_kw:
+            cols = [c for c in ["query", "total_impr_a", "avg_pos_a", "total_clicks_a"]
+                    if c in pd.DataFrame(new_kw).columns]
+            st.dataframe(pd.DataFrame(new_kw)[cols].head(20), use_container_width=True)
+        else:
+            st.info("No new keywords in this period.")
+
+        st.subheader("Lost Keywords")
+        if lost_kw:
+            cols = [c for c in ["query", "total_impr_b", "avg_pos_b", "total_clicks_b"]
+                    if c in pd.DataFrame(lost_kw).columns]
+            st.dataframe(pd.DataFrame(lost_kw)[cols].head(20), use_container_width=True)
+        else:
+            st.info("No lost keywords in this period.")
+
+    with t_p2:
+        page2 = processed.get("page_two_opportunities", [])
+        st.subheader("Page 2 Opportunities (Positions 10–20)")
+        if page2:
+            cols = [c for c in ["query", "avg_pos_a", "total_impr_a", "total_clicks_a"]
+                    if c in pd.DataFrame(page2).columns]
+            st.dataframe(pd.DataFrame(page2)[cols].head(30), use_container_width=True)
+            st.caption(
+                "These keywords are within striking distance of Page 1. "
+                "Add internal links and optimize title/meta."
+            )
+        else:
+            st.info("No page 2 opportunities found.")
+
+    with t_ai:
+        if st.button("Generate AI Report", key="gen_gsc_ai", type="primary"):
+            api_key = auth_manager.get_api_key(user_id, provider)
+            if not api_key and provider != "local_ollama":
+                st.error(f"No API key stored for '{provider}'. Add it in the sidebar.")
+            else:
+                with st.spinner("Generating AI report..."):
+                    if low_traffic:
+                        suggestions = generate_content_suggestions(
+                            processed, provider, api_key or "", model, google_site
+                        )
+                        st.session_state[ai_key] = {"type": "content", "data": suggestions}
+                    else:
+                        report = generate_gsc_report(
+                            processed, provider, api_key or "", model, google_site
+                        )
+                        st.session_state[ai_key] = {"type": "report", "data": report}
+
+        ai_result = st.session_state.get(ai_key)
+        if ai_result:
+            if ai_result["type"] == "report":
+                st.markdown(ai_result["data"])
+                if st.button("Save to Knowledge Base", key="gsc_kb_save"):
+                    _save_gsc_to_kb(processed, ai_result["data"], google_site, window_days)
+
+            elif ai_result["type"] == "content":
+                st.subheader("Content Suggestions (Low Traffic Mode)")
+                for i, item in enumerate(ai_result["data"], 1):
+                    with st.expander(f"{i}. {item.get('blog_title', 'Untitled')}"):
+                        st.write(f"**Target Keyword:** {item.get('target_keyword', '')}")
+                        st.write(f"**Intent:** {item.get('intent', '')}")
+                if st.button("Save to Knowledge Base", key="gsc_kb_save_content"):
+                    _save_gsc_to_kb(
+                        processed,
+                        json.dumps(ai_result["data"], indent=2, ensure_ascii=False),
+                        google_site,
+                        window_days,
+                    )
+        else:
+            st.info("Click **Generate AI Report** to produce an LLM-powered SEO analysis.")
+
+
+# ===========================================================================
+#  BING ANALYSIS TAB
+# ===========================================================================
+
+def _render_bing_analysis_tab(db, user_id: str, bing_site: str):
+    """Full Bing analysis UI: run → 4 sub-tabs (Query, Page, GEO, AI) + KB save."""
+    from V2_Engine.saas_core.auth import auth_manager
+    from V2_Engine.processors.source_5_webmaster.bing_processor import (
+        fetch_bing_query_stats, fetch_bing_page_stats,
+        build_bing_report, categorize_bing_strategy,
+    )
+    from V2_Engine.processors.source_5_webmaster.webmaster_analyzer import (
+        generate_bing_report,
+    )
+
+    st.success(f"Active site: `{bing_site}`")
+
+    # ── Controls row ─────────────────────────────────────────────────────
+    c1, c2 = st.columns([2, 1])
+    with c1:
+        provider, model = auth_manager.render_tab_model_selector(
+            user_id, "webmaster_bing"
+        )
+    with c2:
+        run_btn = st.button("Run Bing Analysis", type="primary", key="run_bing")
+
+    result_key = f"bing_result_{bing_site}"
+    ai_key = f"bing_ai_{bing_site}"
+
+    if run_btn:
+        cred = db.get_credential(user_id, "bing", "api_key")
+        bing_api_key = (cred or {}).get("api_key", "")
+        if not bing_api_key:
+            st.error("Bing API key not found. Please save it above.")
+            return
+        with st.spinner("Fetching Bing Webmaster data..."):
+            try:
+                query_rows = fetch_bing_query_stats(bing_api_key, bing_site)
+                page_rows = fetch_bing_page_stats(bing_api_key, bing_site)
+                report = build_bing_report(query_rows, page_rows)
+                strategy = categorize_bing_strategy(report)
+                st.session_state[result_key] = {"report": report, "strategy": strategy}
+                st.session_state.pop(ai_key, None)
+            except Exception as exc:
+                st.error(f"Bing fetch failed: {exc}")
+                return
+
+    cached = st.session_state.get(result_key)
+    if cached is None:
+        st.info("Click **Run Bing Analysis** to fetch data.")
+        return
+
+    report = cached["report"]
+    strategy = cached["strategy"]
+
+    # ── Sub-tabs ──────────────────────────────────────────────────────────
+    t_q, t_p, t_geo, t_ai = st.tabs(
+        ["Query Report", "Page Report", "GEO Strategy", "AI Report"]
+    )
+
+    with t_q:
+        for label, key in [("7-Day Queries", "query_7d"), ("28-Day Queries", "query_28d")]:
+            st.subheader(label)
+            rows = report.get(key, {}).get("scored", [])
+            if rows:
+                df = pd.DataFrame(rows)
+                show = [c for c in ["query", "growth_score", "ai_citation_tier",
+                                     "impr_a", "clicks_a", "avg_pos_a"] if c in df.columns]
+                st.dataframe(df[show].head(20), use_container_width=True)
+            else:
+                st.info(f"No {label.lower()} available.")
+
+    with t_p:
+        for label, key in [("7-Day Pages", "page_7d"), ("28-Day Pages", "page_28d")]:
+            st.subheader(label)
+            rows = report.get(key, {}).get("scored", [])
+            if rows:
+                df = pd.DataFrame(rows)
+                show = [c for c in ["page", "growth_score", "impr_a", "clicks_a"] if c in df.columns]
+                st.dataframe(df[show].head(20), use_container_width=True)
+            else:
+                st.info(f"No {label.lower()} available.")
+
+    with t_geo:
+        geo = strategy.get("geo_opportunities", [])
+        st.subheader("GEO Opportunities (Zero Click — AI may be answering)")
+        if geo:
+            st.dataframe(pd.DataFrame(geo).head(20), use_container_width=True)
+        else:
+            st.info("No GEO opportunities found.")
+
+        comm = strategy.get("commercial_wins", [])
+        st.subheader("Commercial Intent Signals")
+        if comm:
+            st.dataframe(pd.DataFrame(comm).head(20), use_container_width=True)
+        else:
+            st.info("No commercial signals found.")
+
+        early = strategy.get("early_signals", [])
+        st.subheader("All Early Signals")
+        if early:
+            st.dataframe(pd.DataFrame(early).head(30), use_container_width=True)
+        else:
+            st.info("No early signals detected.")
+
+    with t_ai:
+        if st.button("Generate AI Report", key="gen_bing_ai", type="primary"):
+            api_key = auth_manager.get_api_key(user_id, provider)
+            if not api_key and provider != "local_ollama":
+                st.error(f"No API key stored for '{provider}'. Add it in the sidebar.")
+            else:
+                with st.spinner("Generating Bing AI report..."):
+                    ai_report = generate_bing_report(
+                        strategy, provider, api_key or "", model, bing_site
+                    )
+                    st.session_state[ai_key] = ai_report
+
+        ai_report = st.session_state.get(ai_key)
+        if ai_report:
+            st.markdown(ai_report)
+            if st.button("Save to Knowledge Base", key="bing_kb_save"):
+                _save_bing_to_kb(strategy, ai_report, bing_site)
+        else:
+            st.info("Click **Generate AI Report** to produce an LLM-powered Bing analysis.")
+
+
+# ===========================================================================
+#  KB SAVE HELPERS
+# ===========================================================================
+
+def _save_gsc_to_kb(processed: dict, ai_report: str, site_url: str, window_days: int):
+    """Twin-File Protocol: save GSC result to 5_webmaster/ subfolder."""
+    from V2_Engine.knowledge_base.manager import KnowledgeManager
+
+    rows = []
+    for cat, kws in [
+        ("rising",    processed.get("rising_keywords", [])),
+        ("new",       processed.get("new_keywords", [])),
+        ("declining", processed.get("declining_keywords", [])),
+        ("lost",      processed.get("lost_keywords", [])),
+    ]:
+        for kw in kws:
+            rows.append({**kw, "category": cat})
+
+    df = pd.DataFrame(rows) if rows else pd.DataFrame()
+    site_clean = (
+        site_url.replace("https://", "").replace("http://", "")
+        .replace("/", "_").rstrip("_")
+    )
+    filename = f"{site_clean}_gsc_{window_days}d_{date.today().isoformat()}"
+
+    km = KnowledgeManager()
+    km.save_insight(
+        subfolder="5_webmaster",
+        filename=filename,
+        content=ai_report,
+        dataframe=df if not df.empty else None,
+    )
+    st.success(f"Saved to Knowledge Base: `{filename}`")
+
+
+def _save_bing_to_kb(strategy: dict, ai_report: str, site_url: str):
+    """Twin-File Protocol: save Bing result to 5_webmaster/ subfolder."""
+    from V2_Engine.knowledge_base.manager import KnowledgeManager
+
+    rows = (
+        [{"type": "geo",        **r} for r in strategy.get("geo_opportunities", [])] +
+        [{"type": "commercial", **r} for r in strategy.get("commercial_wins",   [])] +
+        [{"type": "signal",     **r} for r in strategy.get("early_signals",     [])]
+    )
+    df = pd.DataFrame(rows) if rows else pd.DataFrame()
+    site_clean = (
+        site_url.replace("https://", "").replace("http://", "")
+        .replace("/", "_").rstrip("_")
+    )
+    filename = f"{site_clean}_bing_{date.today().isoformat()}"
+
+    km = KnowledgeManager()
+    km.save_insight(
+        subfolder="5_webmaster",
+        filename=filename,
+        content=ai_report,
+        dataframe=df if not df.empty else None,
+    )
+    st.success(f"Saved to Knowledge Base: `{filename}`")
