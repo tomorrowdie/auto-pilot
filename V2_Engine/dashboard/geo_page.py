@@ -1,11 +1,11 @@
 """
-Source 6 — Harbor SEO Writer (Auto Pilot GEO)
+Source 6 — Auto Pilot GEO Writer
 
-The main Harbor UI. A 7-pillar nested sidebar navigation shell that will host
+The main Auto Pilot GEO UI. A 7-pillar nested sidebar navigation shell that will host
 Epics 1–4 of the SEO Writer Engine. Each pillar is a placeholder for an upcoming
 Epic sprint.
 
-Navigation: app.py radio -> "Source 6: Harbor"  -> sub-radio -> Harbor pillars
+Navigation: app.py radio -> "Source 6: Auto Pilot GEO"  -> sub-radio -> GEO pillars
 
 Epics:
     Epic 0 — Intelligence Hub (hub_page.py)
@@ -32,7 +32,7 @@ _PROJECT_ROOT = os.path.dirname(
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-_BOOKS_DEMO_PATH = os.path.join(_PROJECT_ROOT, "data", "books_demo.json")
+_BOOKS_DEMO_PATH = os.path.join(_PROJECT_ROOT, "data", "demo", "sample_books", "books_demo.json")
 _KB_GEO_FOLDER   = os.path.join(
     _PROJECT_ROOT, "V2_Engine", "knowledge_base", "storage", "6_seo_writer"
 )
@@ -43,16 +43,16 @@ _KB_GEO_FOLDER   = os.path.join(
 # ===========================================================================
 
 def render_geo_page() -> None:
-    """Harbor SEO Writer — nested 7-pillar navigation shell."""
+    """Auto Pilot GEO Writer — nested 7-pillar navigation shell."""
 
     # -----------------------------------------------------------------------
-    # Harbor Secondary Sidebar Navigation
+    # Auto Pilot GEO Sidebar Navigation
     # -----------------------------------------------------------------------
     with st.sidebar:
         st.divider()
-        st.caption("Harbor SEO Writer")
-        harbor_nav = st.radio(
-            "Harbor Pillars",
+        st.caption("Auto Pilot GEO")
+        geo_nav = st.radio(
+            "Auto Pilot GEO",
             [
                 "Dashboard",
                 "Discovery Grid",
@@ -62,7 +62,7 @@ def render_geo_page() -> None:
                 "Link Builder",
                 "Site Health",
             ],
-            key="harbor_nav",
+            key="geo_nav",
             label_visibility="collapsed",
         )
         st.divider()
@@ -82,19 +82,19 @@ def render_geo_page() -> None:
     # -----------------------------------------------------------------------
     # Route to pillar
     # -----------------------------------------------------------------------
-    if harbor_nav == "Dashboard":
+    if geo_nav == "Dashboard":
         _render_dashboard(book)
-    elif harbor_nav == "Discovery Grid":
+    elif geo_nav == "Discovery Grid":
         _render_discovery_grid(book)
-    elif harbor_nav == "Keyword Galaxy":
+    elif geo_nav == "Keyword Galaxy":
         _render_keyword_galaxy(book)
-    elif harbor_nav == "Writer Engine":
+    elif geo_nav == "Writer Engine":
         _render_writer_engine(book)
-    elif harbor_nav == "Output Library":
+    elif geo_nav == "Output Library":
         _render_output_library()
-    elif harbor_nav == "Link Builder":
+    elif geo_nav == "Link Builder":
         _render_coming_soon("Link Builder", "Epic 4+", "Build internal links from semantic keyword clusters.")
-    elif harbor_nav == "Site Health":
+    elif geo_nav == "Site Health":
         _render_coming_soon("Site Health", "Epic 4+", "Monitor GSC/Bing performance signals in one view.")
 
 
@@ -103,14 +103,13 @@ def render_geo_page() -> None:
 # ===========================================================================
 
 def _render_dashboard(book: dict | None) -> None:
-    st.header("Harbor Dashboard")
+    st.header("Auto Pilot GEO Dashboard")
     st.caption("Your intelligence command center. A live snapshot of all data sources feeding the Writer Engine.")
 
     if book is None:
         st.warning(
             "No Intelligence Book loaded. Go to **Intelligence Hub** and click "
             "**Build Intelligence Book** first.",
-            icon="",
         )
         return
 
@@ -371,7 +370,7 @@ def _render_writer_engine(book: dict | None) -> None:
     with col_b:
         st.subheader("Target Article Formats")
         st.markdown(
-            "- **Harbor Hybrid** — Markdown body + JSON-LD schema + semantic HTML H-tags\n"
+            "- **Auto Pilot GEO Hybrid** — Markdown body + JSON-LD schema + semantic HTML H-tags\n"
             "- **Product Comparison** — vs competitor matrix (from catalog data)\n"
             "- **COSMO Intent Cluster** — one article per intent (BLW, Travel Feeding, etc.)\n"
             "- **EEAT Authority Piece** — built on real review proof points\n"
@@ -391,7 +390,7 @@ def _render_writer_engine(book: dict | None) -> None:
 
 def _render_output_library() -> None:
     st.header("Output Library")
-    st.caption("Your generated articles, saved as Harbor Hybrid Markdown + JSON-LD + CSV metadata.")
+    st.caption("Your generated articles, saved as Auto Pilot GEO Hybrid Markdown + JSON-LD + CSV metadata.")
 
     _epic_status_banner("Epic 4", "Output Library coming in Epic 4 sprint.")
 
@@ -435,4 +434,4 @@ def _render_coming_soon(pillar: str, epic: str, description: str) -> None:
 
 def _epic_status_banner(epic: str, message: str) -> None:
     """Show a styled 'coming soon' banner for unimplemented Epics."""
-    st.info(f"**{epic} — Shell Ready:** {message}", icon="")
+    st.info(f"**{epic} — Shell Ready:** {message}")

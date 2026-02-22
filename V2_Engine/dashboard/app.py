@@ -132,7 +132,7 @@ with st.sidebar:
             "Review Analysis",
             "Rufus Defense",
             "Source 5: Webmaster",
-            "Source 6: Harbor",
+            "Source 6: Auto Pilot GEO",
         ],
         key="nav_radio",
     )
@@ -278,20 +278,20 @@ if nav == "Source 5: Webmaster":
     st.stop()
 
 # ===================================================================
-# SOURCE 6: Harbor SEO Writer (Epic 0+)
+# SOURCE 6: Auto Pilot GEO Writer (Epic 0+)
 # ===================================================================
-if nav == "Source 6: Harbor":
+if nav == "Source 6: Auto Pilot GEO":
     with st.sidebar:
         st.divider()
-        st.caption("Harbor Mode")
-        harbor_mode = st.radio(
-            "Harbor Entry",
-            ["Intelligence Hub", "SEO Writer"],
-            key="harbor_mode_radio",
+        st.caption("Auto Pilot GEO")
+        geo_mode = st.radio(
+            "Auto Pilot GEO",
+            ["Intelligence Hub", "GEO Writer"],
+            key="geo_mode_radio",
             label_visibility="collapsed",
         )
 
-    if harbor_mode == "Intelligence Hub":
+    if geo_mode == "Intelligence Hub":
         from V2_Engine.dashboard.hub_page import render_hub_page
         render_hub_page()
     else:

@@ -3,9 +3,9 @@ Source 6 — Intelligence Hub (Epic 0)
 
 The Master Uploader. Assembles the canonical Book JSON from all upstream sources
 (Catalog, Traffic, Reviews, Rufus, Webmaster) and gives the user a unified view
-of their intelligence before entering the Harbor SEO Writer.
+of their intelligence before entering the Auto Pilot GEO Writer.
 
-Navigation: app.py radio -> "Source 6: Harbor"  -> sub-radio -> "Intelligence Hub"
+Navigation: app.py radio -> "Source 6: Auto Pilot GEO"  -> sub-radio -> "Intelligence Hub"
 """
 
 from __future__ import annotations
@@ -27,8 +27,8 @@ if _PROJECT_ROOT not in sys.path:
 
 from V2_Engine.processors.source_6_seo.book_builder import build_book
 
-_RAW_EXPORT_DIR = os.path.join(_PROJECT_ROOT, "data", "raw_zeabur_exports")
-_BOOKS_DEMO_PATH = os.path.join(_PROJECT_ROOT, "data", "books_demo.json")
+_RAW_EXPORT_DIR  = os.path.join(_PROJECT_ROOT, "data", "raw_zeabur_exports")
+_BOOKS_DEMO_PATH = os.path.join(_PROJECT_ROOT, "data", "demo", "sample_books", "books_demo.json")
 
 
 # ===========================================================================
@@ -39,7 +39,7 @@ def render_hub_page() -> None:
     st.header("Intelligence Hub")
     st.caption(
         "Assemble your Book — the unified intelligence brief that powers the "
-        "Harbor SEO Writer Engine. All upstream sources feed into a single, "
+        "Auto Pilot GEO Writer Engine. All upstream sources feed into a single, "
         "structured JSON ready for AI-driven article generation."
     )
 
@@ -59,7 +59,7 @@ def render_hub_page() -> None:
         with col_domain:
             site_domain = st.text_input(
                 "Site Domain",
-                value=st.session_state.get("hub_site_domain", ""),
+                value=st.session_state.get("hub_site_domain", "anergyacademy.com"),
                 placeholder="e.g. mybrand.com",
                 help="Domain used to locate Bing and GSC webmaster files.",
                 key="hub_site_domain_input",
@@ -103,6 +103,7 @@ def render_hub_page() -> None:
 
                 # Auto-save books_demo.json when built in demo mode
                 if mode == "demo":
+                    os.makedirs(os.path.dirname(_BOOKS_DEMO_PATH), exist_ok=True)
                     with open(_BOOKS_DEMO_PATH, "w", encoding="utf-8") as f:
                         json.dump(book, f, indent=2, ensure_ascii=False, default=str)
 
