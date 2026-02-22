@@ -90,6 +90,7 @@ class KnowledgeManager:
         content: str,
         dataframe=None,
         raw_json: str | None = None,
+        also_export_to: str | None = None,
     ) -> str:
         """
         Save a Markdown string to storage/<subfolder>/<filename>.
@@ -99,15 +100,23 @@ class KnowledgeManager:
             {filename}.csv  — Tabular keyword/signal data (paired with MD)
             {filename}.json — Complete raw structured data (for Source 6 ingestion)
 
+        Dual-Save Protocol (PM Decision #7):
+            When also_export_to is provided, all written files are ALSO copied
+            to that directory. Use this to keep data/raw_zeabur_exports/ in sync
+            so book_builder always has the latest system runs to process.
+            Pass: also_export_to=RAW_EXPORT_DIR (see constant in each page module).
+
         Args:
-            subfolder: Target subfolder inside storage/ (created if missing).
-                       e.g. '0_catalog_insight', '5_webmaster'.
-            filename:  File name WITHOUT extension (e.g. 'site_gsc_7d_2026-02-21').
-                       The .md suffix is added automatically if missing.
-            content:   Pre-formatted Markdown string.
-            dataframe: Optional pandas DataFrame to save as paired CSV.
-            raw_json:  Optional JSON string to save as paired .json file.
-                       Pass json.dumps(full_data_dict, indent=2, default=str).
+            subfolder:      Target subfolder inside storage/ (created if missing).
+                            e.g. '0_catalog_insight', '5_webmaster'.
+            filename:       File name WITHOUT extension (e.g. 'site_gsc_7d_2026-02-21').
+                            The .md suffix is added automatically if missing.
+            content:        Pre-formatted Markdown string.
+            dataframe:      Optional pandas DataFrame to save as paired CSV.
+            raw_json:       Optional JSON string to save as paired .json file.
+                            Pass json.dumps(full_data_dict, indent=2, default=str).
+            also_export_to: Optional directory path. When set, all produced files
+                            are duplicated to this directory verbatim.
 
         Returns:
             The base filename that was written (with .md extension).
@@ -136,6 +145,22 @@ class KnowledgeManager:
             json_path = os.path.join(dest_dir, json_filename)
             with open(json_path, "w", encoding="utf-8") as f:
                 f.write(raw_json)
+
+        # Dual-Save Protocol: mirror all written files to export directory
+        if also_export_to:
+            os.makedirs(also_export_to, exist_ok=True)
+            # Mirror MD
+            with open(os.path.join(also_export_to, filename), "w", encoding="utf-8") as f:
+                f.write(content)
+            # Mirror CSV
+            if dataframe is not None:
+                csv_filename = filename.replace(".md", ".csv")
+                dataframe.to_csv(os.path.join(also_export_to, csv_filename), index=False)
+            # Mirror JSON
+            if raw_json is not None:
+                json_filename = filename.replace(".md", ".json")
+                with open(os.path.join(also_export_to, json_filename), "w", encoding="utf-8") as f:
+                    f.write(raw_json)
 
         return filename
 

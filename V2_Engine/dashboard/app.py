@@ -126,7 +126,14 @@ with st.sidebar:
 
     nav = st.radio(
         "Navigation",
-        ["Catalog Insight", "Keyword Traffic - Hardline", "Review Analysis", "Rufus Defense", "Source 5: Webmaster"],
+        [
+            "Catalog Insight",
+            "Keyword Traffic - Hardline",
+            "Review Analysis",
+            "Rufus Defense",
+            "Source 5: Webmaster",
+            "Source 6: Harbor",
+        ],
         key="nav_radio",
     )
     st.divider()
@@ -268,6 +275,28 @@ if nav == "Rufus Defense":
 if nav == "Source 5: Webmaster":
     from V2_Engine.dashboard.webmaster_page import render_webmaster_page
     render_webmaster_page()
+    st.stop()
+
+# ===================================================================
+# SOURCE 6: Harbor SEO Writer (Epic 0+)
+# ===================================================================
+if nav == "Source 6: Harbor":
+    with st.sidebar:
+        st.divider()
+        st.caption("Harbor Mode")
+        harbor_mode = st.radio(
+            "Harbor Entry",
+            ["Intelligence Hub", "SEO Writer"],
+            key="harbor_mode_radio",
+            label_visibility="collapsed",
+        )
+
+    if harbor_mode == "Intelligence Hub":
+        from V2_Engine.dashboard.hub_page import render_hub_page
+        render_hub_page()
+    else:
+        from V2_Engine.dashboard.geo_page import render_geo_page
+        render_geo_page()
     st.stop()
 
 # ===================================================================
