@@ -59,6 +59,9 @@ temp/
 # --- Markdown (docs, reports, notes — not for deployment) ---
 *.md
 !README.md
+# Allow versioned prompt templates (needed for Zeabur deployment)
+!V2_Engine/prompts/active/*.md
+!V2_Engine/prompts/archive/*.md
 
 # --- Log Files ---
 *.log

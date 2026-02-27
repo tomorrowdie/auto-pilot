@@ -1,11 +1,11 @@
 """
-Source 6 — Auto Pilot GEO Writer
+GEO Writer Engine
 
-The main Auto Pilot GEO UI. A 7-pillar nested sidebar navigation shell that will host
+The main GEO Writer UI. A 7-pillar nested sidebar navigation shell that hosts
 Epics 1–4 of the SEO Writer Engine. Each pillar is a placeholder for an upcoming
 Epic sprint.
 
-Navigation: app.py radio -> "Source 6: Auto Pilot GEO"  -> sub-radio -> GEO pillars
+Navigation: app.py radio -> "GEO Writer Engine" -> sub-radio -> GEO pillars
 
 Epics:
     Epic 0 — Intelligence Hub (hub_page.py)
@@ -667,9 +667,9 @@ def _render_writer_engine(book: dict | None) -> None:
         from V2_Engine.saas_core.auth import auth_manager as _am
         _vault_uid = st.session_state.get("user_id", "dev_admin")
         api_key    = _am.get_api_key(_vault_uid, "google") or ""
-        model      = "gemini-flash" if api_key else "mock"
+        model      = "gemini-3.1-pro-preview" if api_key else "mock"
         if api_key:
-            st.caption("LLM: Gemini Flash ✓")
+            st.caption("LLM: Gemini 3.1 Pro ✓")
         else:
             st.warning(
                 "No Google API key found — running in mock preview mode.  \n"

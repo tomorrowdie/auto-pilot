@@ -27,7 +27,7 @@ import time
 _PROJECT_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
-_PROMPT_DIR = os.path.join(_PROJECT_ROOT, "data", "raw_zeabur_exports")
+_PROMPT_DIR = os.path.join(_PROJECT_ROOT, "V2_Engine", "prompts", "active")
 
 
 # ---------------------------------------------------------------------------
@@ -497,18 +497,17 @@ def _call_llm(prompt: str, api_key: str, model: str, system: str = "") -> str:
 
 
 def _call_gemini(prompt: str, api_key: str, model: str, system: str) -> str:
-    """Gemini API via google-generativeai SDK."""
+    """Gemini 3.1 Pro via google-genai SDK."""
     try:
-        import google.generativeai as genai  # type: ignore
-        genai.configure(api_key=api_key)
-        model_name = (
-            "gemini-2.5-pro" if "pro" in model else "gemini-2.5-flash"
+        from google import genai                    # type: ignore
+        from google.genai import types              # type: ignore
+        client = genai.Client(api_key=api_key)
+        cfg = types.GenerateContentConfig(system_instruction=system) if system else None
+        response = client.models.generate_content(
+            model="gemini-3.1-pro-preview",
+            contents=prompt,
+            config=cfg,
         )
-        kwargs = {}
-        if system:
-            kwargs["system_instruction"] = system
-        m = genai.GenerativeModel(model_name=model_name, **kwargs)
-        response = m.generate_content(prompt)
         return response.text
     except Exception as exc:
         return f"[Gemini error: {exc}]"

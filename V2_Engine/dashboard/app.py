@@ -137,11 +137,11 @@ with st.sidebar:
         "Navigation",
         [
             "Catalog Insight",
-            "Keyword Traffic - Hardline",
+            "Keyword Intelligence",
             "Review Analysis",
             "Rufus Defense",
-            "Source 5: Webmaster",
-            "Source 6: Auto Pilot GEO",
+            "Sitemap Architecture",
+            "GEO Writer Engine",
         ],
         key="nav_radio",
     )
@@ -255,15 +255,15 @@ if "kb_view" in st.session_state:
             st.rerun()
 
 # ===================================================================
-# SOURCE 1: Traffic Cerebro
+# Keyword Intelligence
 # ===================================================================
-if nav == "Keyword Traffic - Hardline":
+if nav == "Keyword Intelligence":
     from V2_Engine.dashboard.cerebro_page import render_cerebro_page
     render_cerebro_page()
     st.stop()
 
 # ===================================================================
-# SOURCE 2: Review Analysis
+# Review Analysis
 # ===================================================================
 if nav == "Review Analysis":
     from V2_Engine.dashboard.reviews_page import render_reviews_page
@@ -271,7 +271,7 @@ if nav == "Review Analysis":
     st.stop()
 
 # ===================================================================
-# SOURCE 3: Rufus Defense
+# Rufus Defense
 # ===================================================================
 if nav == "Rufus Defense":
     from V2_Engine.dashboard.rufus_page import render_rufus_page
@@ -279,22 +279,22 @@ if nav == "Rufus Defense":
     st.stop()
 
 # ===================================================================
-# SOURCE 5: Webmaster (GSC + Bing)
+# Sitemap Architecture (GSC + Bing)
 # ===================================================================
-if nav == "Source 5: Webmaster":
+if nav == "Sitemap Architecture":
     from V2_Engine.dashboard.webmaster_page import render_webmaster_page
     render_webmaster_page()
     st.stop()
 
 # ===================================================================
-# SOURCE 6: Auto Pilot GEO Writer (Epic 0+)
+# GEO Writer Engine (Epic 0+)
 # ===================================================================
-if nav == "Source 6: Auto Pilot GEO":
+if nav == "GEO Writer Engine":
     with st.sidebar:
         st.divider()
-        st.caption("Auto Pilot GEO")
+        st.caption("GEO Writer Engine")
         geo_mode = st.radio(
-            "Auto Pilot GEO",
+            "GEO Writer Engine",
             ["Intelligence Hub", "GEO Writer"],
             key="geo_mode_radio",
             label_visibility="collapsed",
