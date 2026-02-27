@@ -558,7 +558,7 @@ def _render_keyword_galaxy(book: dict | None) -> None:
 
 
 def _render_writer_engine(book: dict | None) -> None:
-    st.header("Writer Engine")
+    st.header("Auto Pilot GEO")
     st.caption(
         "3-stage AI article generator. Book JSON is injected directly into each prompt "
         "— no RAG, no fragmentation, full cross-source context."
@@ -571,7 +571,7 @@ def _render_writer_engine(book: dict | None) -> None:
     # Lazy-import the chain module
     try:
         from V2_Engine.processors.source_6_seo.llm_chain import (
-            run_part0, run_part1, run_part2, md_to_html,
+            md_to_html, run_part0, run_part1, run_part2, parse_structured_output,
         )
         _chain_ok = True
     except ImportError as _e:
@@ -593,25 +593,16 @@ def _render_writer_engine(book: dict | None) -> None:
     col_left, col_right = st.columns([1, 2])
 
     # ===================================================================
-    # LEFT COLUMN — Wizard / Controls
+    # LEFT COLUMN — Controls
     # ===================================================================
     with col_left:
-        st.subheader("Article Setup")
+        st.subheader("GEO Writer")
+        st.caption("Configure your article, then click Generate.")
 
-        # Mode toggle
-        mode = st.radio(
-            "Mode",
-            ["Simple", "Advanced"],
-            horizontal=True,
-            key="writer_mode_radio",
-            label_visibility="collapsed",
-        )
-        st.divider()
-
-        # --- Keyword target (auto-hydrated from Epic 1) ---
-        st.caption("Keyword Target")
+        # ── KEYWORD TARGET ───────────────────────────────────────────────
+        st.markdown("**Keyword Target**")
         if primary_kw:
-            st.success(f"Primary: **{primary_kw}**")
+            st.success(f"**{primary_kw}**")
             if secondary_kws:
                 sec_preview = ", ".join(secondary_kws[:3])
                 suffix = f" +{len(secondary_kws) - 3} more" if len(secondary_kws) > 3 else ""
@@ -620,31 +611,41 @@ def _render_writer_engine(book: dict | None) -> None:
                 st.caption(f"Intent: {intent}")
             manual_primary = primary_kw
         else:
-            st.warning("No keyword locked. Go to **Keyword Galaxy** first, or enter manually below.")
+            st.warning("No keyword locked — go to **Keyword Galaxy** first.")
             manual_primary = st.text_input(
-                "Primary Keyword (manual override)",
+                "Primary Keyword",
                 placeholder="e.g. baby spoon",
                 key="writer_primary_manual",
             )
 
-        effective_primary = manual_primary  # may be from session state or manual entry
+        effective_primary = (manual_primary or "").strip()
 
-        # --- Advanced Mode extra fields ---
-        brand    = ""
-        industry = ""
-        audience = ""
-        tone     = "Informative"
-        art_len  = 1500
-        api_key  = ""
-        model    = "mock"
+        # ── BRAND IDENTITY ───────────────────────────────────────────────
+        with st.expander("🏷️ Brand Identity"):
+            brand          = st.text_input("Brand Name",        placeholder="e.g. BabyNosh",                  key="w_brand")
+            industry       = st.text_input("Industry / Niche",  placeholder="e.g. Baby Feeding Products",     key="w_industry")
+            founded        = st.text_input("Founded",           placeholder="e.g. Austin TX, 2018",           key="w_founded")
+            core_values    = st.text_area( "Core Values",       placeholder="e.g. Safety, Simplicity, Joy",   key="w_core_values",    height=68)
+            brand_heritage = st.text_area( "Brand Heritage",    placeholder="Brief origin story...",          key="w_brand_heritage", height=68)
+            mission        = st.text_input("Mission Statement", placeholder="e.g. Healthier meals for babies", key="w_mission")
+            brand_story    = st.text_area( "Brand Story",       placeholder="Longer brand narrative...",      key="w_brand_story",    height=80)
+            distribution   = st.text_input("Distribution",      placeholder="e.g. Amazon, DTC website",       key="w_distribution")
+            audience       = st.text_input("Target Audience",   placeholder="e.g. New parents, 25–40",        key="w_audience")
+            website_base   = st.text_input("Website URL",       placeholder="e.g. https://babynosh.com",      key="w_website_base")
 
-        if mode == "Advanced":
-            st.divider()
-            st.caption("Brand & Audience")
-            brand    = st.text_input("Brand Name",       placeholder="e.g. BabyNosh",              key="w_brand")
-            industry = st.text_input("Industry / Niche", placeholder="e.g. Baby Feeding",           key="w_industry")
-            audience = st.text_input("Target Audience",  placeholder="e.g. New parents, 25–40",     key="w_audience")
-            tone     = st.selectbox(
+        # ── CONTENT PROJECT ──────────────────────────────────────────────
+        with st.expander("📋 Content Project"):
+            main_topic      = st.text_input("Main Topic",      placeholder="e.g. Best Baby Spoons 2025",  key="w_main_topic")
+            target_location = st.text_input("Target Location", placeholder="e.g. United States",          key="w_target_location")
+            _cl_options = [
+                "CLUSTER_L3 — Cluster (1,500–3,000w)",
+                "PILLAR_L1 — Pillar (3,000–6,000w)",
+                "SUBPILLAR_L2 — Sub-Pillar (2,000–4,000w)",
+                "SUPPORT_L4 — Support (800–1,500w)",
+            ]
+            _cl_sel     = st.selectbox("Content Level", _cl_options, key="w_content_level")
+            content_level_val = _cl_sel.split(" — ")[0]
+            tone = st.selectbox(
                 "Tone of Voice",
                 ["Informative", "Conversational", "Expert / Authority", "Persuasive", "Friendly & Warm"],
                 key="w_tone",
@@ -655,32 +656,35 @@ def _render_writer_engine(book: dict | None) -> None:
                 index=2,
                 key="w_length",
             )
-            st.divider()
-            st.caption("LLM Settings (BYOK)")
-            api_key = st.text_input(
-                "API Key",
-                type="password",
-                placeholder="Gemini or Qwen API key",
-                key="w_api_key",
-            )
-            model_choice = st.selectbox(
-                "Model",
-                ["mock (UI preview)", "gemini-pro", "gemini-flash", "qwen"],
-                key="w_model",
-            )
-            model   = "mock" if model_choice == "mock (UI preview)" else model_choice
-            api_key = "" if model == "mock" else api_key
 
-        # --- Prompt ingredient summary ---
-        st.divider()
-        with st.expander("Prompt Ingredients"):
+        # ── SITE ARCHITECTURE ────────────────────────────────────────────
+        with st.expander("🔗 Site Architecture"):
+            main_pillar_page = st.text_input("Main Pillar Page", placeholder="e.g. Baby Feeding Guide",  key="w_main_pillar_page")
+            sub_pillar_page  = st.text_input("Sub-Pillar Page",  placeholder="e.g. Best Baby Utensils",  key="w_sub_pillar_page")
+            sister_clusters  = st.text_input("Sister Clusters",  placeholder="e.g. silicone spoons, self-feeding", key="w_sister_clusters")
+
+        # ── LLM (wired from global API key vault) ────────────────────────
+        from V2_Engine.saas_core.auth import auth_manager as _am
+        _vault_uid = st.session_state.get("user_id", "dev_admin")
+        api_key    = _am.get_api_key(_vault_uid, "google") or ""
+        model      = "gemini-flash" if api_key else "mock"
+        if api_key:
+            st.caption("LLM: Gemini Flash ✓")
+        else:
+            st.warning(
+                "No Google API key found — running in mock preview mode.  \n"
+                "Add your Gemini key in the **API Keys** sidebar."
+            )
+
+        # ── PROMPT INGREDIENTS ───────────────────────────────────────────
+        with st.expander("🧪 Prompt Ingredients"):
             ma, mb = st.columns(2)
             ma.metric("COSMO Intents",  len(rev.get("cosmo_intents", [])))
             ma.metric("EEAT Proof",     len(rev.get("eeat_proof", [])))
             ma.metric("Rufus Traps",    len(ruf.get("trap_questions", [])))
             mb.metric("Dealbreakers",   len(ruf.get("dealbreakers", [])))
             mb.metric("Listing Gaps",   len(ruf.get("listing_gaps", [])))
-            mb.metric("Rufus Keywords", len(rev.get("rufus_keywords", [])))
+            mb.metric("Rufus KWs",      len(rev.get("rufus_keywords", [])))
 
         st.divider()
 
@@ -701,53 +705,115 @@ def _render_writer_engine(book: dict | None) -> None:
         # ----------------------------------------------------------------
         # A) GENERATE flow — runs inline so st.status renders in real-time
         # ----------------------------------------------------------------
-        if generate_clicked and effective_primary and _chain_ok:
+        if generate_clicked and not effective_primary:
+            st.error(
+                "**No keyword provided.** Lock a primary keyword in **Keyword Galaxy** "
+                "or type one manually in the left panel before generating."
+            )
+
+        elif generate_clicked and effective_primary and _chain_ok:
             inputs = {
-                "primary_kw":     effective_primary,
-                "secondary_kws":  secondary_kws,
-                "intent":         intent,
-                "brand":          brand,
-                "industry":       industry,
-                "audience":       audience or "customers",
-                "tone":           tone,
-                "article_length": art_len,
+                # Keyword target
+                "primary_kw":        effective_primary,
+                "primary_keyword":   effective_primary,
+                "secondary_kws":     secondary_kws,
+                "secondary_keyword": ", ".join(secondary_kws) if isinstance(secondary_kws, list) else str(secondary_kws),
+                "intent":            intent,
+                # Brand identity
+                "brand":             brand,
+                "industry":          industry,
+                "founded":           founded,
+                "core_values":       core_values,
+                "brand_heritage":    brand_heritage,
+                "mission":           mission,
+                "brand_story":       brand_story,
+                "distribution":      distribution,
+                "audience":          audience or "customers",
+                "target_audience":   audience or "customers",
+                "website_base":      website_base,
+                # Content project
+                "main_topic":        main_topic or effective_primary,
+                "target_location":   target_location,
+                "content_level":     content_level_val,
+                "tone":              tone,
+                "article_length":    art_len,
+                # Site architecture
+                "main_pillar_page":  main_pillar_page,
+                "sub_pillar_page":   sub_pillar_page,
+                "sister_clusters":   sister_clusters,
             }
-            with st.status("Generating SEO article...", expanded=True) as status:
-                st.write("Stage 1/3 — Building content architecture brief...")
-                p0 = run_part0(inputs, api_key, model)
+            with st.status("Stage 1/3 — Building content architecture brief...", expanded=True) as status:
+                p0 = run_part0(inputs, api_key, model, book=book)
 
-                st.write("Stage 2/3 — Generating article outline...")
-                p1 = run_part1(inputs, p0, api_key, model)
+                status.update(label="Stage 2/3 — Generating article outline...", state="running")
+                p1 = run_part1(inputs, p0, api_key, model, book=book)
 
-                st.write("Stage 3/3 — Writing full article draft...")
-                p2 = run_part2(inputs, p1, api_key, model)
+                status.update(label="Stage 3/3 — Writing full article draft...", state="running")
+                p2 = run_part2(inputs, p1, api_key, model, book=book)
 
-                html = md_to_html(p2)
+                parsed = parse_structured_output(p2)
+                html   = md_to_html(parsed["body"] or p2)
                 status.update(label="Article complete!", state="complete", expanded=False)
 
             st.session_state["writer_result"] = {
-                "part0":      p0,
-                "part1":      p1,
-                "markdown":   p2,
-                "html":       html,
-                "primary_kw": effective_primary,
+                "title":          parsed["title"],
+                "body":           parsed["body"],
+                "tech_seo":       parsed["tech_seo"],
+                "part0":          p0,
+                "part1":          p1,
+                "markdown":       p2,
+                "clean_markdown": parsed["body"],
+                "html":           html,
+                "primary_kw":     effective_primary,
             }
             st.rerun()
+
+        # ----------------------------------------------------------------
+        # B-pre) STALE CACHE EVICTION
+        # writer_result entries from before the sentinel parser lack "body".
+        # Clear them so the user sees the idle state rather than raw markers.
+        # ----------------------------------------------------------------
+        elif writer_result and "body" not in writer_result:
+            st.session_state.pop("writer_result", None)
+            st.info(
+                "The article output format was updated. "
+                "Please click **Generate SEO Article** again to get structured output."
+            )
 
         # ----------------------------------------------------------------
         # B) RESULT view — shown after generation
         # ----------------------------------------------------------------
         elif writer_result:
-            md_text   = writer_result.get("markdown", "")
-            html_text = writer_result.get("html", "")
-            art_kw    = writer_result.get("primary_kw", effective_primary)
-            safe_slug = (art_kw or "article").replace(" ", "_")
+            # body_text = clean prose (sentinel-parsed). Falls back to raw markdown for
+            # old cached results that pre-date the sentinel system.
+            raw_md     = writer_result.get("markdown", "")
+            body_text  = writer_result.get("body") or writer_result.get("clean_markdown") or raw_md
+            tech_seo   = writer_result.get("tech_seo", "")
+            html_text  = writer_result.get("html", "")
+            art_kw     = writer_result.get("primary_kw", effective_primary)
+            safe_slug  = (art_kw or "article").replace(" ", "_")
 
             # Output tabs
-            tab_visual, tab_html, tab_outline = st.tabs(["Visual", "</> HTML", "Outline"])
+            tab_visual, tab_seo, tab_html, tab_outline = st.tabs(
+                ["Visual", "SEO Package", "</> HTML", "Outline"]
+            )
 
             with tab_visual:
-                st.markdown(md_text)
+                st.markdown(body_text)
+
+            with tab_seo:
+                if tech_seo:
+                    st.caption(
+                        "Raw Technical SEO package — meta tags, JSON-LD schema, "
+                        "Open Graph & Twitter Cards. Copy-paste directly into your CMS `<head>`."
+                    )
+                    st.code(tech_seo, language="html")
+                else:
+                    st.info(
+                        "No SEO package extracted. "
+                        "Re-generate the article to get structured output — "
+                        "the model may not have used the sentinel format yet."
+                    )
 
             with tab_html:
                 st.code(html_text, language="html")
@@ -763,13 +829,53 @@ def _render_writer_engine(book: dict | None) -> None:
             st.divider()
             st.caption("Actions")
 
+            # -- Primary: Save to Library ---------------------------------
+            _save_col, _save_status_col = st.columns([1, 3])
+            with _save_col:
+                _save_clicked = st.button(
+                    "💾 Save to Library",
+                    type="primary",
+                    use_container_width=True,
+                    key="tb_save_library",
+                )
+            with _save_status_col:
+                if st.session_state.get("last_saved_article"):
+                    st.success(f"Saved: `{st.session_state['last_saved_article']}`")
+
+            if _save_clicked:
+                try:
+                    import pandas as _pd
+                    from datetime import datetime as _dt
+                    from V2_Engine.knowledge_base.manager import KnowledgeManager as _KM
+                    os.makedirs(_KB_GEO_FOLDER, exist_ok=True)
+                    _km = _KM()
+                    _fname_base = _km.make_filename(art_kw or "article").replace(".md", "")
+                    _meta_df = _pd.DataFrame([{
+                        "primary_kw":    art_kw,
+                        "saved_at":      _dt.now().strftime("%Y-%m-%d %H:%M"),
+                        "word_count":    len(body_text.split()),
+                        "model":         model,
+                        "content_level": st.session_state.get("w_content_level", ""),
+                        "tone":          st.session_state.get("w_tone", ""),
+                    }])
+                    _saved = _km.save_insight(
+                        subfolder="6_seo_writer",
+                        filename=_fname_base,
+                        content=body_text,
+                        dataframe=_meta_df,
+                    )
+                    st.session_state["last_saved_article"] = _saved
+                    st.rerun()
+                except Exception as _exc:
+                    st.error(f"Save failed: {_exc}")
+
             row1 = st.columns(4)
             row2 = st.columns(4)
 
             # Row 1 — Copy / Download
             with row1[0]:
                 with st.expander("Copy Markdown"):
-                    st.code(md_text, language="markdown")
+                    st.code(body_text, language="markdown")
 
             with row1[1]:
                 with st.expander("Copy HTML"):
@@ -778,7 +884,7 @@ def _render_writer_engine(book: dict | None) -> None:
             with row1[2]:
                 st.download_button(
                     "Download .md",
-                    data=md_text,
+                    data=body_text,
                     file_name=f"{safe_slug}.md",
                     mime="text/markdown",
                     use_container_width=True,
@@ -796,31 +902,40 @@ def _render_writer_engine(book: dict | None) -> None:
                 )
 
             # Row 2 — Navigation / Control
+            def _cb_regen():
+                st.session_state.pop("writer_result", None)
+                st.session_state.pop("last_saved_article", None)
+
+            def _cb_write_another():
+                for _k in (
+                    "writer_result", "selected_primary_kw",
+                    "selected_secondary_kws", "selected_intent",
+                    "discovery_shortlist", "last_saved_article",
+                ):
+                    st.session_state.pop(_k, None)
+                st.session_state["geo_nav"] = "Keyword Galaxy"
+
+            def _cb_discover():
+                st.session_state["geo_nav"] = "Discovery Grid"
+
+            def _cb_library():
+                st.session_state["geo_nav"] = "Output Library"
+
             with row2[0]:
-                if st.button("Regenerate", use_container_width=True, key="tb_regen"):
-                    st.session_state.pop("writer_result", None)
-                    st.rerun()
+                st.button("Regenerate", use_container_width=True, key="tb_regen",
+                          on_click=_cb_regen)
 
             with row2[1]:
-                if st.button("Write Another", use_container_width=True, key="tb_another"):
-                    for _k in (
-                        "writer_result", "selected_primary_kw",
-                        "selected_secondary_kws", "selected_intent",
-                        "discovery_shortlist",
-                    ):
-                        st.session_state.pop(_k, None)
-                    st.session_state["geo_nav"] = "Keyword Galaxy"
-                    st.rerun()
+                st.button("Write Another", use_container_width=True, key="tb_another",
+                          on_click=_cb_write_another)
 
             with row2[2]:
-                if st.button("Discover More Ideas", use_container_width=True, key="tb_discover"):
-                    st.session_state["geo_nav"] = "Discovery Grid"
-                    st.rerun()
+                st.button("Discover More Ideas", use_container_width=True, key="tb_discover",
+                          on_click=_cb_discover)
 
             with row2[3]:
-                if st.button("Go to Library", use_container_width=True, key="tb_library"):
-                    st.session_state["geo_nav"] = "Output Library"
-                    st.rerun()
+                st.button("Go to Library", use_container_width=True, key="tb_library",
+                          on_click=_cb_library)
 
             # Connect Publisher placeholder
             with st.expander("Connect Publisher"):
@@ -839,9 +954,11 @@ def _render_writer_engine(book: dict | None) -> None:
                     "Go to **Keyword Galaxy** to lock your primary keyword, "
                     "then return here to generate your article."
                 )
-                if st.button("Go to Keyword Galaxy", key="writer_go_galaxy"):
+                def _cb_go_galaxy():
                     st.session_state["geo_nav"] = "Keyword Galaxy"
-                    st.rerun()
+
+                st.button("Go to Keyword Galaxy", key="writer_go_galaxy",
+                          on_click=_cb_go_galaxy)
             else:
                 st.info(
                     f"**Ready to generate.**  \n"
@@ -869,36 +986,112 @@ def _render_writer_engine(book: dict | None) -> None:
 
 def _render_output_library() -> None:
     st.header("Output Library")
-    st.caption("Your generated articles, saved as Auto Pilot GEO Hybrid Markdown + JSON-LD + CSV metadata.")
+    st.caption("Your generated articles — paired Markdown + CSV metadata (Twin-File Protocol).")
 
-    _epic_status_banner("Epic 4", "Output Library coming in Epic 4 sprint.")
+    os.makedirs(_KB_GEO_FOLDER, exist_ok=True)
 
-    # Show any existing files in 6_seo_writer KB folder
-    if os.path.isdir(_KB_GEO_FOLDER):
-        files = [f for f in os.listdir(_KB_GEO_FOLDER) if f.endswith(".md")]
-        if files:
-            st.subheader(f"Saved Articles ({len(files)})")
-            for fname in sorted(files, reverse=True):
-                fpath = os.path.join(_KB_GEO_FOLDER, fname)
-                size = os.path.getsize(fpath) / 1024
-                col_name, col_size = st.columns([4, 1])
-                with col_name:
-                    if st.button(f"{fname}", key=f"lib_{fname}"):
-                        with open(fpath, "r", encoding="utf-8") as f:
-                            st.session_state["lib_view"] = f.read()
-                with col_size:
-                    st.caption(f"{size:.1f} KB")
+    md_files = sorted(
+        [f for f in os.listdir(_KB_GEO_FOLDER) if f.endswith(".md")],
+        reverse=True,
+    )
 
-            if "lib_view" in st.session_state:
-                with st.expander("Article Preview", expanded=True):
-                    st.markdown(st.session_state["lib_view"])
-                    if st.button("Close"):
-                        st.session_state.pop("lib_view")
-                        st.rerun()
-        else:
-            st.info(f"No articles saved yet in `6_seo_writer/`. Generate your first article with the Writer Engine.")
-    else:
-        st.info("Output library folder will be created when you save your first article.")
+    if not md_files:
+        st.info(
+            "No articles saved yet.  \n"
+            "Generate your first article in the **Writer Engine**, then click **💾 Save to Library**."
+        )
+        if st.button("Go to Writer Engine", key="lib_go_writer"):
+            st.session_state["geo_nav"] = "Writer Engine"
+            st.rerun()
+        return
+
+    st.subheader(f"Saved Articles ({len(md_files)})")
+
+    import pandas as pd
+
+    # ---- Column header row ----
+    hdr = st.columns([4, 2, 2, 1, 1, 1])
+    hdr[0].caption("**Keyword / Title**")
+    hdr[1].caption("**Saved**")
+    hdr[2].caption("**Words**")
+    hdr[3].caption("**Size**")
+    hdr[4].caption("")
+    hdr[5].caption("")
+
+    st.divider()
+
+    for fname in md_files:
+        fpath    = os.path.join(_KB_GEO_FOLDER, fname)
+        csv_path = fpath.replace(".md", ".csv")
+        file_kb  = os.path.getsize(fpath) / 1024
+
+        # Default values parsed from the filename slug
+        keyword    = fname.replace(".md", "")
+        saved_at   = "—"
+        word_count = "—"
+
+        if os.path.exists(csv_path):
+            try:
+                _meta = pd.read_csv(csv_path)
+                if len(_meta) > 0:
+                    _row = _meta.iloc[0].to_dict()
+                    keyword    = str(_row.get("primary_kw", keyword))
+                    saved_at   = str(_row.get("saved_at", "—"))
+                    word_count = str(_row.get("word_count", "—"))
+            except Exception:
+                pass
+
+        is_open  = st.session_state.get("lib_view_file") == fname
+        row_cols = st.columns([4, 2, 2, 1, 1, 1])
+        row_cols[0].markdown(f"**{keyword}**")
+        row_cols[1].caption(saved_at)
+        row_cols[2].caption(f"{word_count}w" if word_count != "—" else "—")
+        row_cols[3].caption(f"{file_kb:.1f}KB")
+
+        with row_cols[4]:
+            if st.button(
+                "Close" if is_open else "View",
+                key=f"lib_view_{fname}",
+                use_container_width=True,
+            ):
+                if is_open:
+                    st.session_state.pop("lib_view_file", None)
+                else:
+                    st.session_state["lib_view_file"] = fname
+                st.rerun()
+
+        with row_cols[5]:
+            if st.button(
+                "🗑", key=f"lib_del_{fname}",
+                use_container_width=True, help="Delete this article",
+            ):
+                os.remove(fpath)
+                if os.path.exists(csv_path):
+                    os.remove(csv_path)
+                if st.session_state.get("lib_view_file") == fname:
+                    st.session_state.pop("lib_view_file", None)
+                st.session_state.pop("last_saved_article", None)
+                st.rerun()
+
+        # ---- Inline article preview ----
+        if is_open:
+            with open(fpath, "r", encoding="utf-8") as _f:
+                _content = _f.read()
+            with st.container(border=True):
+                _tab_visual, _tab_md, _tab_dl = st.tabs(["Visual", "Markdown", "Download"])
+                with _tab_visual:
+                    st.markdown(_content)
+                with _tab_md:
+                    st.code(_content, language="markdown")
+                with _tab_dl:
+                    st.download_button(
+                        "⬇ Download .md",
+                        data=_content,
+                        file_name=fname,
+                        mime="text/markdown",
+                        key=f"lib_dl_{fname}",
+                        use_container_width=True,
+                    )
 
 
 def _render_coming_soon(pillar: str, epic: str, description: str) -> None:

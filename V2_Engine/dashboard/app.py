@@ -13,9 +13,18 @@ Usage:
     (from 008-Auto-Pilot/)
 """
 
+import importlib
 import os
 import sys
 import tempfile
+
+# Force Python to recheck source file mtimes before loading any cached .pyc.
+# Prevents stale bytecode errors after edits on Windows (PyCharm / Zeabur deploys).
+importlib.invalidate_caches()
+
+# Load .env before any module reads os.environ (e.g. TOKEN_ENC_KEY, DB_PATH)
+from dotenv import load_dotenv
+load_dotenv()
 
 import pandas as pd
 import streamlit as st

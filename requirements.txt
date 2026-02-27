@@ -29,6 +29,12 @@ cryptography>=41.0.0
 # --- Environment ---
 python-dotenv>=1.0.0
 
+# --- Markdown Rendering (used in llm_chain.py md_to_html) ---
+markdown>=3.4.0
+
+# --- Google Generative AI (direct SDK used in llm_chain.py) ---
+google-generativeai>=0.8.0
+
 # --- LangChain V5 Stack ---
 # Core abstractions (Messages, Runnables) — required by all providers
 langchain-core>=0.3.0

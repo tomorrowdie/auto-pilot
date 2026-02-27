@@ -16,6 +16,7 @@ Until then, model="mock" returns realistic demo content instantly.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import time
@@ -35,14 +36,14 @@ _PROMPT_DIR = os.path.join(_PROJECT_ROOT, "data", "raw_zeabur_exports")
 _DEFAULT_T0 = (
     "You are an expert SEO content strategist. Produce a concise content architecture "
     "brief (300–400 words) for a high-ranking article.\n\n"
-    "PRIMARY KEYWORD   : __PRIMARY_KW__\n"
-    "SECONDARY KEYWORDS: __SECONDARY_KWS__\n"
-    "COSMO INTENT      : __INTENT__\n"
-    "BRAND             : __BRAND__\n"
-    "INDUSTRY / NICHE  : __INDUSTRY__\n"
-    "TARGET AUDIENCE   : __AUDIENCE__\n"
-    "TONE              : __TONE__\n"
-    "TARGET LENGTH     : __ARTICLE_LENGTH__ words\n\n"
+    "PRIMARY KEYWORD   : [PRIMARY_KEYWORD]\n"
+    "SECONDARY KEYWORDS: [SECONDARY_KEYWORD]\n"
+    "COSMO INTENT      : [INTENT]\n"
+    "BRAND             : [BRAND]\n"
+    "INDUSTRY / NICHE  : [INDUSTRY]\n"
+    "TARGET AUDIENCE   : [TARGET_AUDIENCE]\n"
+    "TONE              : [TONE]\n"
+    "TARGET LENGTH     : [ARTICLE_LENGTH] words\n\n"
     "Output: angle selection, EEAT signal plan, primary H-tag structure proposal, "
     "semantic keyword clusters to weave in."
 )
@@ -50,9 +51,9 @@ _DEFAULT_T0 = (
 _DEFAULT_T1 = (
     "Based on this content brief:\n\n"
     "--- BRIEF START ---\n"
-    "__PART0_OUTPUT__\n"
+    "[PART0_OUTPUT]\n"
     "--- BRIEF END ---\n\n"
-    "Create a detailed article outline for: __PRIMARY_KW__\n\n"
+    "Create a detailed article outline for: [PRIMARY_KEYWORD]\n\n"
     "Format: numbered H2 sections, each with 2-3 H3 sub-sections and bullet-point "
     "content directions. Include a FAQ section and a Conclusion."
 )
@@ -60,20 +61,44 @@ _DEFAULT_T1 = (
 _DEFAULT_T2 = (
     "Based on this outline:\n\n"
     "--- OUTLINE START ---\n"
-    "__PART1_OUTPUT__\n"
+    "[PART1_OUTPUT]\n"
     "--- OUTLINE END ---\n\n"
     "Write the complete, publish-ready SEO article in Markdown.\n\n"
     "Requirements:\n"
-    "- Title (H1) naturally contains: __PRIMARY_KW__\n"
+    "- Title (H1) naturally contains: [PRIMARY_KEYWORD]\n"
     "- Meta Description (italic, under title, ≤ 155 chars)\n"
     "- Introduction hooks the reader and includes the primary keyword in first 100 words\n"
     "- All outlined sections fully developed\n"
-    "- Secondary keywords woven naturally: __SECONDARY_KWS__\n"
-    "- COSMO intent satisfied: __INTENT__\n"
+    "- Secondary keywords woven naturally: [SECONDARY_KEYWORD]\n"
+    "- COSMO intent satisfied: [INTENT]\n"
     "- FAQ section with 5 questions (use H3 for each)\n"
     "- Conclusion with a clear CTA\n"
-    "- Tone: __TONE__\n"
-    "- Target length: __ARTICLE_LENGTH__ words"
+    "- Tone: [TONE]\n"
+    "- Target length: [ARTICLE_LENGTH] words\n\n"
+    "INTERNAL LINKING RULES:\n"
+    "You are equipped with the site's actual live URLs:\n"
+    "[LIVE_SITEMAP_URLS]\n\n"
+    "1. AUTO-MATCH: Scan the article for topics, products, and themes that correspond to any URL "
+    "in the approved list above. Insert 2–5 contextually natural internal links using keyword-rich anchor text.\n"
+    "2. FUTURE CLUSTERS: For Sister Cluster topics not yet live, format URLs strictly as: "
+    "[WEBSITE_BASE]/blog/[kebab-case-cluster-name]\n"
+    "3. STRICT RULE: Do NOT invent, guess, or hallucinate any URL. "
+    "If no URL in the approved list matches a topic, omit the internal link entirely.\n\n"
+    "KNOWLEDGE BASE CONTEXT (brand, market, reviews, rufus intelligence):\n"
+    "[KNOWLEDGE_BASE]\n\n"
+    "MANDATORY OUTPUT FORMAT — YOUR ENTIRE RESPONSE MUST BE ONLY THESE THREE BLOCKS:\n"
+    "Do NOT write any content before ===TITLE===.\n"
+    "Do NOT write any content after ===END_TECHNICAL_SEO===.\n"
+    "Output each piece of content ONCE, inside the correct block.\n\n"
+    "===TITLE===\n"
+    "[H1 title — plain text, no # prefix, under 75 characters]\n"
+    "===END_TITLE===\n\n"
+    "===ARTICLE_BODY===\n"
+    "[Full article Markdown — H1 through Conclusion. No <meta>, <title>, or <script> tags here.]\n"
+    "===END_ARTICLE_BODY===\n\n"
+    "===TECHNICAL_SEO===\n"
+    "[All HTML meta tags, JSON-LD <script> blocks, Open Graph, Twitter Cards, Pinterest elements.]\n"
+    "===END_TECHNICAL_SEO==="
 )
 
 # ---------------------------------------------------------------------------
@@ -196,26 +221,237 @@ def _load_prompt(filename: str) -> str:
     return ""
 
 
-def _base_vars(inputs: dict) -> dict:
-    """Build the common variable dict from inputs."""
+def _book_to_context(book: dict | None) -> str:
+    """
+    Convert the canonical Book dict to a compact JSON string for LLM injection.
+    Caps large arrays to avoid context overflow — keeps the most signal-dense slices.
+    """
+    if not book:
+        return "(no knowledge base data available)"
+    try:
+        web = book.get("webmaster_book", {})
+        compact = {
+            "meta":    book.get("meta", {}),
+            "catalog": {
+                "market_summary":  book.get("catalog_book", {}).get("market_summary", {}),
+                "revenue_leaders": book.get("catalog_book", {}).get("revenue_leaders", [])[:5],
+            },
+            "traffic": {
+                "top_keywords": book.get("traffic_book", {}).get("top_keywords", [])[:30],
+                "summary":      book.get("traffic_book", {}).get("summary", {}),
+            },
+            "reviews": {
+                "happy_themes":   book.get("reviews_book", {}).get("happy_themes", [])[:15],
+                "defect_themes":  book.get("reviews_book", {}).get("defect_themes", [])[:15],
+                "cosmo_intents":  book.get("reviews_book", {}).get("cosmo_intents", [])[:10],
+                "eeat_proof":     book.get("reviews_book", {}).get("eeat_proof", [])[:10],
+                "rufus_keywords": book.get("reviews_book", {}).get("rufus_keywords", [])[:20],
+                "summary":        book.get("reviews_book", {}).get("summary", {}),
+            },
+            "rufus": {
+                "trap_questions": book.get("rufus_book", {}).get("trap_questions", [])[:15],
+                "dealbreakers":   book.get("rufus_book", {}).get("dealbreakers", []),
+                "hero_scenarios": book.get("rufus_book", {}).get("hero_scenarios", []),
+                "listing_gaps":   book.get("rufus_book", {}).get("listing_gaps", []),
+                "seo_flags":      book.get("rufus_book", {}).get("seo_flags", []),
+                "summary":        book.get("rufus_book", {}).get("summary", {}),
+            },
+            "webmaster": {
+                "gsc_summary":      web.get("gsc", {}).get("summary", {}),
+                "rising_keywords":  web.get("gsc", {}).get("rising_keywords", [])[:10],
+                "page_two_opps":    web.get("gsc", {}).get("page_two_opportunities", [])[:10],
+                "bing_top_queries": web.get("bing", {}).get("top_queries", [])[:10],
+                "geo_signals":      web.get("geo_signals", [])[:10],
+                "summary":          web.get("summary", {}),
+            },
+        }
+        return json.dumps(compact, indent=2, ensure_ascii=False)
+    except Exception as exc:
+        return f"(book serialization error: {exc})"
+
+
+def _extract_sitemap_urls(book: dict | None) -> str:
+    """
+    Extract real page URLs from webmaster data for internal link grounding.
+
+    Sources (in priority order):
+      1. webmaster_book.bing.top_pages   — most reliable; each item has a 'page' field
+      2. webmaster_book.gsc.page_two_opportunities — position 8–20 pages
+      3. webmaster_book.gsc.new_keywords  — may carry page context
+
+    Returns a bullet-list string, capped at 100 URLs.
+    Falls back to a placeholder if no webmaster data is available.
+    """
+    if not book:
+        return "(no sitemap data — connect Source 5 Webmaster to enable live URLs)"
+
+    web = book.get("webmaster_book", {})
+    if web.get("status") == "no_data":
+        return "(no sitemap data — connect Source 5 Webmaster to enable live URLs)"
+
+    seen: set[str] = set()
+    urls: list[str] = []
+
+    def _add(item: dict) -> None:
+        url = (
+            item.get("page") or item.get("url") or
+            item.get("landing_page") or item.get("keys", [""])[0]
+            if isinstance(item, dict) else ""
+        )
+        if url and url.startswith("http") and url not in seen:
+            seen.add(url)
+            urls.append(url)
+
+    # 1. Bing top pages (best source)
+    for item in web.get("bing", {}).get("top_pages", []):
+        _add(item)
+
+    # 2. GSC page-two opportunities
+    for item in web.get("gsc", {}).get("page_two_opportunities", []):
+        _add(item)
+
+    # 3. GSC new keywords (may carry page context)
+    for item in web.get("gsc", {}).get("new_keywords", []):
+        _add(item)
+
+    urls = urls[:100]
+
+    if not urls:
+        return "(no page URLs found in webmaster data — run Source 5 analysis first)"
+
+    return "\n".join(f"- {u}" for u in urls)
+
+
+def _base_vars(inputs: dict, book: dict | None = None) -> dict:
+    """Build the full variable dict from inputs — maps to [KEY] placeholders in prompt files."""
+    secondary_kws = inputs.get("secondary_kws", [])
+    secondary_str = (
+        ", ".join(secondary_kws)
+        if isinstance(secondary_kws, list)
+        else str(secondary_kws)
+    )
     return {
-        "primary_kw":      inputs.get("primary_kw", ""),
-        "secondary_kws":   ", ".join(inputs.get("secondary_kws", [])),
-        "intent":          inputs.get("intent", ""),
-        "brand":           inputs.get("brand", ""),
-        "industry":        inputs.get("industry", ""),
-        "audience":        inputs.get("audience", "customers"),
-        "tone":            inputs.get("tone", "Informative"),
-        "article_length":  str(inputs.get("article_length", 1500)),
+        # Keyword targeting
+        "primary_kw":        inputs.get("primary_kw", ""),
+        "primary_keyword":   inputs.get("primary_kw", inputs.get("primary_keyword", "")),
+        "secondary_kws":     secondary_str,
+        "secondary_keyword": inputs.get("secondary_keyword", secondary_str),
+        "intent":            inputs.get("intent", ""),
+        # Writing style
+        "tone":              inputs.get("tone", "Informative"),
+        "article_length":    str(inputs.get("article_length", 1500)),
+        # Brand identity
+        "brand":             inputs.get("brand", ""),
+        "industry":          inputs.get("industry", ""),
+        "founded":           inputs.get("founded", ""),
+        "core_values":       inputs.get("core_values", ""),
+        "brand_heritage":    inputs.get("brand_heritage", ""),
+        "mission":           inputs.get("mission", ""),
+        "brand_story":       inputs.get("brand_story", ""),
+        "distribution":      inputs.get("distribution", ""),
+        "target_audience":   inputs.get("target_audience", inputs.get("audience", "customers")),
+        "audience":          inputs.get("audience", inputs.get("target_audience", "customers")),
+        "website_base":      inputs.get("website_base", ""),
+        # Content project
+        "main_topic":        inputs.get("main_topic", inputs.get("primary_kw", "")),
+        "target_location":   inputs.get("target_location", ""),
+        "content_level":     inputs.get("content_level", "CLUSTER_L3"),
+        # Site architecture
+        "main_pillar_page":  inputs.get("main_pillar_page", ""),
+        "sub_pillar_page":   inputs.get("sub_pillar_page", ""),
+        "sister_clusters":   inputs.get("sister_clusters", ""),
+        # Knowledge base — injected from the Book JSON (Source 0–5 intelligence)
+        "knowledge_base":    _book_to_context(book),
+        "live_sitemap_urls": _extract_sitemap_urls(book),
     }
 
 
 def _hydrate(template: str, variables: dict) -> str:
-    """Safe token replacement using __KEY__ syntax — avoids .format() KeyErrors."""
+    """Safe token replacement using [KEY] syntax — case-insensitive, avoids .format() KeyErrors."""
     result = template
     for key, val in variables.items():
-        result = result.replace(f"__{key.upper()}__", str(val))
+        pattern = re.escape(f"[{key}]")
+        result = re.sub(pattern, lambda m, r=str(val): r, result, flags=re.IGNORECASE)
     return result
+
+
+def _clean_for_display(md_text: str) -> str:
+    """
+    Strip backend SEO scaffolding from Markdown before rendering in Streamlit.
+
+    Removes:
+    - <script>...</script> blocks (single- and multi-line)
+    - Standalone <meta ...> tags
+    - Standalone <title>...</title> tags
+    - Fenced code blocks that contain only HTML tags (```html ... ```)
+    """
+    cleaned = md_text
+
+    # 1. Remove <script> blocks (multiline)
+    cleaned = re.sub(r"<script\b[^>]*>.*?</script>", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
+
+    # 2. Remove <meta ...> self-closing tags (whole line)
+    cleaned = re.sub(r"^\s*<meta\b[^>]*/?\s*>\s*$", "", cleaned, flags=re.MULTILINE | re.IGNORECASE)
+
+    # 3. Remove <title>...</title> tags (single line)
+    cleaned = re.sub(r"^\s*<title\b[^>]*>.*?</title>\s*$", "", cleaned, flags=re.MULTILINE | re.IGNORECASE)
+
+    # 4. Remove fenced ```html blocks that are pure tag scaffolding (no prose)
+    def _strip_html_fence(m: re.Match) -> str:
+        body = m.group(1)
+        # If the block contains only HTML tags (no plain prose words), drop it
+        prose = re.sub(r"<[^>]+>", "", body).strip()
+        return "" if not prose else m.group(0)
+
+    cleaned = re.sub(r"```html\n(.*?)```", _strip_html_fence, cleaned, flags=re.DOTALL)
+
+    # 5. Collapse runs of blank lines left by the removals
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+
+    return cleaned.strip()
+
+
+def parse_structured_output(raw: str) -> dict:
+    """
+    Extract the three sentinel-delimited sections from Stage 2 output.
+
+    Expected format (enforced by the prompt):
+        ===TITLE===          ... ===END_TITLE===
+        ===ARTICLE_BODY===   ... ===END_ARTICLE_BODY===
+        ===TECHNICAL_SEO===  ... ===END_TECHNICAL_SEO===
+
+    Fallback: if sentinels are absent (old cached result, mock run, or
+    model non-compliance), title is extracted from the first H1 line,
+    body is cleaned via _clean_for_display(), and tech_seo is empty.
+    """
+    def _extract(marker: str) -> str:
+        # No \s* inside the pattern — capture everything between sentinels, then strip
+        m = re.search(rf"==={marker}===(.*?)===END_{marker}===", raw, re.DOTALL | re.IGNORECASE)
+        return m.group(1).strip() if m else ""
+
+    title    = _extract("TITLE")
+    body     = _extract("ARTICLE_BODY")
+    tech_seo = _extract("TECHNICAL_SEO")
+
+    # --- Fallback: sentinels absent ---
+    if not body:
+        cleaned = _clean_for_display(raw)
+        body = (
+            "> ⚠️ **Parser Note:** The model did not use the expected sentinel format. "
+            "Cleaned output is shown below. Re-generate to get structured output.\n\n"
+            "---\n\n"
+            + cleaned
+        )
+
+    if not title:
+        h1_match = re.search(r"^#\s+(.+)$", body or raw, re.MULTILINE)
+        title = h1_match.group(1).strip() if h1_match else ""
+
+    return {"title": title, "body": body, "tech_seo": tech_seo}
+
+
+# Keep underscore alias for backward compat with any cached pyc that references it
+_parse_structured_output = parse_structured_output
 
 
 def md_to_html(md_text: str) -> str:
@@ -266,7 +502,7 @@ def _call_gemini(prompt: str, api_key: str, model: str, system: str) -> str:
         import google.generativeai as genai  # type: ignore
         genai.configure(api_key=api_key)
         model_name = (
-            "gemini-2.5-pro-preview-03-25" if "pro" in model else "gemini-2.0-flash"
+            "gemini-2.5-pro" if "pro" in model else "gemini-2.5-flash"
         )
         kwargs = {}
         if system:
@@ -300,13 +536,15 @@ def _call_qwen(prompt: str, api_key: str, model: str, system: str) -> str:
 # Public stage functions (called one-by-one from geo_page.py for live progress)
 # ---------------------------------------------------------------------------
 
-def run_part0(inputs: dict, api_key: str = "", model: str = "mock") -> str:
-    """
-    Stage 0 — Content Architecture Brief.
-    Synthesises keyword + brand + audience into a strategic content brief.
-    """
+def run_part0(
+    inputs: dict,
+    api_key: str = "",
+    model: str = "mock",
+    book: dict | None = None,
+) -> str:
+    """Stage 0 — Content Architecture Brief."""
     template = _load_prompt("seo_prompt_part0.md") or _DEFAULT_T0
-    prompt   = _hydrate(template, _base_vars(inputs))
+    prompt   = _hydrate(template, _base_vars(inputs, book=book))
     return _call_llm(prompt, api_key, model)
 
 
@@ -315,13 +553,11 @@ def run_part1(
     part0_output: str,
     api_key: str = "",
     model: str = "mock",
+    book: dict | None = None,
 ) -> str:
-    """
-    Stage 1 — Article Outline.
-    Takes Stage 0's brief (invisible to user) and builds a full H-tag structure.
-    """
-    template = _load_prompt("seo_prompt_part1.md") or _DEFAULT_T1
-    variables = {**_base_vars(inputs), "part0_output": part0_output}
+    """Stage 1 — Article Outline."""
+    template  = _load_prompt("seo_prompt_part1.md") or _DEFAULT_T1
+    variables = {**_base_vars(inputs, book=book), "part0_output": part0_output}
     prompt    = _hydrate(template, variables)
     return _call_llm(prompt, api_key, model)
 
@@ -331,14 +567,11 @@ def run_part2(
     part1_output: str,
     api_key: str = "",
     model: str = "mock",
+    book: dict | None = None,
 ) -> str:
-    """
-    Stage 2 — Full Draft Production.
-    Takes Stage 1's outline (invisible to user) and writes the complete article.
-    In mock mode returns a realistic demo article for UI testing.
-    """
-    template = _load_prompt("seo_prompt_part2.md") or _DEFAULT_T2
-    variables = {**_base_vars(inputs), "part1_output": part1_output}
+    """Stage 2 — Full Draft Production (book context + sentinel format)."""
+    template  = _load_prompt("seo_prompt_part2.md") or _DEFAULT_T2
+    variables = {**_base_vars(inputs, book=book), "part1_output": part1_output}
     prompt    = _hydrate(template, variables)
 
     if not api_key or model == "mock":
@@ -356,26 +589,29 @@ def run_part2(
 # Convenience wrapper (for external callers / tests)
 # ---------------------------------------------------------------------------
 
-def run_chain(inputs: dict, api_key: str = "", model: str = "mock") -> dict:
+def run_chain(
+    inputs: dict,
+    api_key: str = "",
+    model: str = "mock",
+    book: dict | None = None,
+) -> dict:
     """
-    Run all 3 stages sequentially and return a result dict.
-
-    Returns:
-        {
-            "part0":    str  — architecture brief,
-            "part1":    str  — article outline,
-            "part2":    str  — full draft (Markdown),
-            "markdown": str  — alias for part2,
-            "html":     str  — HTML-converted draft,
-        }
+    Convenience wrapper — runs all 3 stages and returns a fully-parsed result dict.
+    geo_page.py uses the individual run_part* functions for live step-by-step progress;
+    this wrapper is retained for external callers and tests.
     """
-    p0 = run_part0(inputs, api_key, model)
-    p1 = run_part1(inputs, p0, api_key, model)
-    p2 = run_part2(inputs, p1, api_key, model)
+    p0 = run_part0(inputs, api_key, model, book=book)
+    p1 = run_part1(inputs, p0, api_key, model, book=book)
+    p2 = run_part2(inputs, p1, api_key, model, book=book)
+    parsed = parse_structured_output(p2)
     return {
-        "part0":    p0,
-        "part1":    p1,
-        "part2":    p2,
-        "markdown": p2,
-        "html":     md_to_html(p2),
+        "title":          parsed["title"],
+        "body":           parsed["body"],
+        "tech_seo":       parsed["tech_seo"],
+        "part0":          p0,
+        "part1":          p1,
+        "part2":          p2,
+        "markdown":       p2,
+        "clean_markdown": parsed["body"],
+        "html":           md_to_html(parsed["body"] or p2),
     }
