@@ -38,37 +38,65 @@ _REDIRECT_BASE = "https://auto-pilot.zeabur.app"
 #  MAIN ENTRY POINT
 # ===========================================================================
 
-def render_webmaster_page():
-    """Main entry point — called by app.py when nav == 'Webmaster'."""
+def render_webmaster_auth(db=None, oauth=None, user_id: str | None = None):
+    """
+    Standalone auth flow — callable from the onboarding wizard OR the main page.
 
+    Handles:
+        1. Session guard + DB/OAuth initialization (self-initialising when args are None)
+        2. OAuth redirect trap (runs before any UI is drawn)
+        3. Pre-warm site caches on fresh session
+        4. 2-column credential UI (Google left, Bing right)
+
+    Returns:
+        (db, oauth, user_id) on success.
+        None if there is no valid user session (caller should return immediately).
+    """
     from V2_Engine.saas_core.db.database import Database
     from V2_Engine.saas_core.auth.oauth_manager import OAuthManager
 
-    # ── Session guards ──────────────────────────────────────────────────
-    if "user_id" not in st.session_state:
-        st.error("No user session. Please restart the app.")
-        return
+    # ── Session guard ───────────────────────────────────────────────────
+    if user_id is None:
+        if "user_id" not in st.session_state:
+            st.error("No user session. Please restart the app.")
+            return None
+        user_id = st.session_state["user_id"]
 
-    db: Database = st.session_state.get("_webmaster_db")
+    # ── DB + OAuth init ─────────────────────────────────────────────────
     if db is None:
-        db = Database()
-        st.session_state["_webmaster_db"] = db
+        db = st.session_state.get("_webmaster_db")
+        if db is None:
+            db = Database()
+            st.session_state["_webmaster_db"] = db
 
-    user_id: str = st.session_state["user_id"]
-    oauth = OAuthManager(db, user_id)
+    if oauth is None:
+        oauth = OAuthManager(db, user_id)
 
     # ── OAuth redirect trap (must run BEFORE any UI is drawn) ───────────
     _handle_oauth_callback(db, oauth, user_id)
 
-    # ── Pre-warm site caches on fresh session (Issue 1C) ────────────────
-    # On browser refresh session_state is cleared, but DB credentials survive.
-    # Re-fetch site lists silently so the dropdowns appear immediately.
+    # ── Pre-warm site caches on fresh session ────────────────────────────
+    # On browser refresh session_state is cleared but DB credentials survive.
+    # Re-fetch site lists silently so dropdowns appear immediately.
     if oauth.is_connected("google") and "google_sites" not in st.session_state:
-        st.session_state["google_sites"] = _fetch_bing_sites_cached(oauth, "google")
+        st.session_state["google_sites"] = _fetch_gsc_sites_cached(oauth)
     _bing_cred = db.get_credential(user_id, "bing", "api_key")
     _bing_key_prewarm = (_bing_cred or {}).get("api_key", "")
     if _bing_key_prewarm and "bing_sites" not in st.session_state:
         st.session_state["bing_sites"], _ = _fetch_bing_sites(_bing_key_prewarm)
+
+    # ── 2-column credential UI ──────────────────────────────────────────
+    col_google, col_bing = st.columns(2)
+    with col_google:
+        _render_google_section(db, oauth, user_id)
+    with col_bing:
+        _render_bing_section(db, user_id)
+
+    return db, oauth, user_id
+
+
+def render_webmaster_page():
+    """Main entry point — called by app.py when nav == 'Webmaster'."""
 
     # ── Page header ─────────────────────────────────────────────────────
     st.header("Webmaster — SEO & GEO Analytics")
@@ -77,14 +105,11 @@ def render_webmaster_page():
         "and Bing Webmaster, then select a verified property to run analysis."
     )
 
-    # ── 2-column credential UI ──────────────────────────────────────────
-    col_google, col_bing = st.columns(2)
-
-    with col_google:
-        _render_google_section(db, oauth, user_id)
-
-    with col_bing:
-        _render_bing_section(db, user_id)
+    # ── Auth block (credential UI + OAuth flow + cache pre-warm) ────────
+    auth_result = render_webmaster_auth()
+    if auth_result is None:
+        return
+    db, oauth, user_id = auth_result
 
     st.divider()
 
@@ -123,16 +148,23 @@ def _render_google_section(db, oauth, user_id: str):
 
     has_creds = oauth.has_credentials("google")
 
-    # ── Pre-populate Client ID from DB into session state ────────────────
-    # This runs only when the key doesn't exist (fresh page load / first visit).
-    # Prevents the field from blanking out after a save+rerun cycle.
-    if "wm_google_client_id" not in st.session_state and has_creds:
-        saved = db.get_api_credentials(user_id, "google") or {}
-        st.session_state["wm_google_client_id"] = saved.get("client_id", "")
+    # ── Pre-populate Client ID from DB on fresh session load ─────────────
+    # Re-tries whenever the key is missing OR empty (e.g. after a Zeabur restart
+    # with an ephemeral encryption key that couldn't decrypt on the last attempt).
+    _saved_client_id = ""
+    if has_creds:
+        if not st.session_state.get("wm_google_client_id"):
+            _saved_creds = db.get_api_credentials(user_id, "google") or {}
+            _saved_client_id = _saved_creds.get("client_id", "")
+            if _saved_client_id:
+                st.session_state["wm_google_client_id"] = _saved_client_id
+        else:
+            _saved_client_id = st.session_state["wm_google_client_id"]
 
     # ── Credential inputs ────────────────────────────────────────────────
+    _cid_preview = f"  ·  `{_saved_client_id[:28]}…`" if _saved_client_id else ""
     expander_label = (
-        "OAuth App Credentials — ✅ Saved" if has_creds
+        f"OAuth App Credentials — ✅ Saved{_cid_preview}" if has_creds
         else "OAuth App Credentials — ⚠️ Not configured"
     )
     with st.expander(expander_label, expanded=not has_creds):
@@ -187,7 +219,9 @@ def _render_google_section(db, oauth, user_id: str):
         # Fetch and cache verified properties (avoid hitting API every render)
         if "google_sites" not in st.session_state:
             with st.spinner("Fetching verified properties..."):
-                st.session_state["google_sites"] = _fetch_gsc_sites(oauth)
+                _fetched_sites, _debug_info = _fetch_gsc_sites(oauth)
+                st.session_state["google_sites"] = _fetched_sites
+                st.session_state["google_sites_debug"] = _debug_info
 
         sites = st.session_state.get("google_sites", [])
 
@@ -199,8 +233,13 @@ def _render_google_section(db, oauth, user_id: str):
             )
         else:
             st.warning("No verified properties found in this account.")
+            _debug = st.session_state.get("google_sites_debug", "")
+            if _debug:
+                with st.expander("Debug: Raw API Response"):
+                    st.code(_debug, language="json")
             if st.button("Retry", key="retry_gsc"):
                 st.session_state.pop("google_sites", None)
+                st.session_state.pop("google_sites_debug", None)
                 st.rerun()
 
         if st.button("Disconnect Google", key="dc_google"):
@@ -361,20 +400,30 @@ def _handle_oauth_callback(db, oauth, user_id: str):
         st.query_params.clear()
 
 
-def _fetch_gsc_sites(oauth) -> list[str]:
+def _fetch_gsc_sites(oauth) -> tuple[list[str], str]:
     """
     Fetch the user's verified properties from Google Search Console.
-    Returns a list of site URL strings, or [] on any failure.
+
+    Scope: https://www.googleapis.com/auth/webmasters.readonly
+
+    Returns:
+        (sites, debug_info) — sites is [] on failure.
+        debug_info is the raw JSON response string on success,
+        or the error message string on failure.
     """
     try:
         from googleapiclient.discovery import build
         creds = oauth.google_get_credentials()
         service = build("webmasters", "v3", credentials=creds)
         response = service.sites().list().execute()
-        return [s["siteUrl"] for s in response.get("siteEntry", [])]
+        raw_debug = json.dumps(response, indent=2, default=str)
+        sites = [s["siteUrl"] for s in response.get("siteEntry", [])]
+        logger.info("GSC sites fetched: %d properties found", len(sites))
+        return sites, raw_debug
     except Exception as e:
-        logger.warning(f"GSC site fetch failed: {e}")
-        return []
+        err_msg = f"GSC site fetch error: {e}"
+        logger.warning(err_msg)
+        return [], err_msg
 
 
 def _fetch_bing_sites(api_key: str) -> tuple[list[str], str]:
@@ -428,13 +477,10 @@ def _fetch_bing_sites(api_key: str) -> tuple[list[str], str]:
     return [], last_error
 
 
-def _fetch_bing_sites_cached(oauth, provider: str) -> list[str]:
-    """Thin wrapper — fetches GSC sites via the oauth object (pre-warm helper)."""
-    try:
-        return _fetch_gsc_sites(oauth)
-    except Exception as e:
-        logger.warning(f"Pre-warm GSC fetch failed: {e}")
-        return []
+def _fetch_gsc_sites_cached(oauth) -> list[str]:
+    """Pre-warm helper — fetches GSC sites and discards debug info."""
+    sites, _ = _fetch_gsc_sites(oauth)
+    return sites
 
 
 # ===========================================================================

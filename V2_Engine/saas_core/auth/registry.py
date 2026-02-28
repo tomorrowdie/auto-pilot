@@ -43,12 +43,14 @@ PROVIDER_SPECS: dict[str, dict] = {
     "google": {
         "label":         "Google (Gemini)",
         "env_var":       "GOOGLE_API_KEY",
-        "default_model": "gemini-2.5-flash",
+        "default_model": "gemini-3.1-pro-preview",
         "openai_compatible": False,
         "models": [
             "gemini-2.5-flash",
+            "gemini-2.5-flash-lite",
             "gemini-2.5-pro",
-            "gemini-ultra-2.5",
+            "gemini-3-flash-preview",
+            "gemini-3.1-pro-preview",
         ],
     },
     "deepseek": {

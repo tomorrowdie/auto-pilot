@@ -7,7 +7,7 @@ Source 6 — LLM Chain for SEO Writer Engine (Epic 2)
   Part 2 : Full Draft          — complete article, ready to publish
 
 Each stage injects the previous stage's output invisibly as context.
-Prompt templates are loaded from data/raw_zeabur_exports/seo_prompt_part{0,1,2}.md.
+Prompt templates are loaded from V2_Engine/prompts/active/seo_prompt_part{0,1,2}.md.
 If the files are empty, built-in stub prompts are used automatically.
 
 LLM caller is modular — PM will plug in Gemini / Qwen API key later.
@@ -480,8 +480,8 @@ def _call_llm(prompt: str, api_key: str, model: str, system: str = "") -> str:
     """
     Modular LLM caller.
     - api_key empty OR model='mock' → returns the hydrated prompt (for UI testing)
-    - model='gemini-pro' / 'gemini-flash' → Gemini via google-generativeai
-    - model='qwen' → Qwen via OpenAI-compatible endpoint
+    - model starts with 'gemini'     → Gemini via google-genai SDK
+    - model starts with 'qwen'       → Qwen via OpenAI-compatible endpoint
     """
     if not api_key or model == "mock":
         time.sleep(1.2)   # simulate network latency
@@ -497,14 +497,14 @@ def _call_llm(prompt: str, api_key: str, model: str, system: str = "") -> str:
 
 
 def _call_gemini(prompt: str, api_key: str, model: str, system: str) -> str:
-    """Gemini 3.1 Pro via google-genai SDK."""
+    """Gemini via google-genai SDK. Uses the exact model string passed in."""
     try:
         from google import genai                    # type: ignore
         from google.genai import types              # type: ignore
         client = genai.Client(api_key=api_key)
         cfg = types.GenerateContentConfig(system_instruction=system) if system else None
         response = client.models.generate_content(
-            model="gemini-3.1-pro-preview",
+            model=model,
             contents=prompt,
             config=cfg,
         )
