@@ -1077,6 +1077,7 @@ def render_rufus_page():
             kb.save_insight(
                 _KB_FOLDER, filename, md_content,
                 dataframe=csv_df,
+                project_slug=st.session_state.get("project_slug", ""),
             )
             csv_name = filename.replace(".md", ".csv")
             saved = f"`{_KB_FOLDER}/{filename}`"

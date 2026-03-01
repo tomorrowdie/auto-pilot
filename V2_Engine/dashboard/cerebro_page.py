@@ -362,6 +362,7 @@ def render_cerebro_page():
                         kb.save_insight(
                             _KB_FOLDER, filename, md_content,
                             dataframe=csv_df,
+                            project_slug=st.session_state.get("project_slug", ""),
                         )
                         csv_name = filename.replace(".md", ".csv")
                         st.success(
@@ -406,6 +407,7 @@ def render_cerebro_page():
                     kb.save_insight(
                         _KB_FOLDER, filename, md_content,
                         dataframe=filtered_df,
+                        project_slug=st.session_state.get("project_slug", ""),
                     )
                     csv_name = filename.replace(".md", ".csv")
                     st.success(

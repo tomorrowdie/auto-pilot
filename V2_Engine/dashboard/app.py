@@ -99,40 +99,6 @@ with st.sidebar:
     st.caption("Intelligence Dashboard")
     st.divider()
 
-    # -----------------------------------------------------------------------
-    # Project Switcher
-    # -----------------------------------------------------------------------
-    _projects = db.get_projects(_user_id, "amazon")
-    _project_labels = [p["label"] or p["site_url"] for p in _projects]
-
-    if _project_labels:
-        _selected_label = st.selectbox(
-            "Select Project",
-            options=_project_labels,
-            key="project_selector",
-        )
-        _sel_idx = _project_labels.index(_selected_label)
-        st.session_state["project_id"] = _projects[_sel_idx]["id"]
-        st.session_state["project_name"] = _selected_label
-        st.success(f"Connected: {_selected_label}")
-    else:
-        st.info("No projects yet. Create one below.")
-
-    with st.expander("New Project", expanded=not bool(_project_labels)):
-        _proj_name = st.text_input("Project Name", placeholder="e.g. Garlic Press Launch", key="new_proj_name")
-        _proj_domain = st.text_input("Domain", placeholder="e.g. mybrand.com", key="new_proj_domain")
-        if st.button("Create Project", key="btn_create_project", use_container_width=True):
-            if _proj_name.strip():
-                _site = _proj_domain.strip() if _proj_domain.strip() else _proj_name.strip()
-                db.add_project(_user_id, "amazon", _site, _proj_name.strip())
-                st.session_state["project_name"] = _proj_name.strip()
-                st.success(f"Created: {_proj_name.strip()}")
-                st.rerun()
-            else:
-                st.warning("Enter a project name.")
-
-    st.divider()
-
     nav = st.radio(
         "Navigation",
         [
@@ -236,6 +202,13 @@ with st.sidebar:
                             st.warning("Target name already exists or invalid.")
                     else:
                         st.warning("Enter a new name.")
+
+# ===================================================================
+# TOP STATUS BAR — persistent across all pages
+# ===================================================================
+from V2_Engine.dashboard.components.top_bar import render_top_bar
+render_top_bar(db, _user_id)
+st.divider()
 
 # ===================================================================
 # KNOWLEDGE VIEWER — shared (show selected file from sidebar)
@@ -358,7 +331,10 @@ with st.expander(
             _title = "Catalog Insight"
             _md = snapshot_to_markdown(_title, snapshot)
             _md_fname = kb.make_filename(_title)
-            kb.save_insight(_CATALOG_FOLDER, _md_fname, _md, dataframe=df)
+            kb.save_insight(
+                _CATALOG_FOLDER, _md_fname, _md, dataframe=df,
+                project_slug=st.session_state.get("project_slug", ""),
+            )
 
             st.success(
                 f"Processed {len(df)} rows. "
@@ -420,7 +396,10 @@ with st.container():
             md_content = snapshot_to_markdown(save_title.strip(), snapshot)
             filename = kb.make_filename(save_title.strip())
             current_df = st.session_state.get("df")
-            kb.save_insight(save_folder, filename, md_content, dataframe=current_df)
+            kb.save_insight(
+                save_folder, filename, md_content, dataframe=current_df,
+                project_slug=st.session_state.get("project_slug", ""),
+            )
             csv_name = filename.replace(".md", ".csv")
             st.success(
                 f"Saved to Knowledge Base! \u2192 `{save_folder}/{filename}` + `{csv_name}`"

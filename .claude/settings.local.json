@@ -12,7 +12,8 @@
       "Bash(python -m V2_Engine.processors.source_5_webmaster.test_sitemap:*)",
       "Bash(python -m V2_Engine.processors.source_0_market_data.test_ingest:*)",
       "Bash(python:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(xargs rm -rf)"
     ],
     "deny": [],
     "ask": []

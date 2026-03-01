@@ -538,6 +538,7 @@ def render_reviews_page():
                     kb.save_insight(
                         _KB_FOLDER, filename, md_content,
                         dataframe=combined_df,
+                        project_slug=st.session_state.get("project_slug", ""),
                     )
                     csv_name = filename.replace(".md", ".csv")
                     st.success(

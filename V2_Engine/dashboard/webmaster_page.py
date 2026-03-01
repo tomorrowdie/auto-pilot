@@ -96,45 +96,75 @@ def render_webmaster_auth(db=None, oauth=None, user_id: str | None = None):
 
 
 def render_webmaster_page():
-    """Main entry point — called by app.py when nav == 'Webmaster'."""
+    """
+    Webmaster analytics page — called by app.py when nav == 'Sitemap Architecture'.
 
-    # ── Page header ─────────────────────────────────────────────────────
+    Auth and credential management are handled by the persistent Top Status Bar
+    (🔗 Connect Data Sources expander). This function renders analytics ONLY.
+    If no provider is connected it shows a guide pointing to that panel.
+    """
+    from V2_Engine.saas_core.db.database import Database
+    from V2_Engine.saas_core.auth.oauth_manager import OAuthManager
+
     st.header("Webmaster — SEO & GEO Analytics")
     st.caption(
-        "Enter your credentials below to connect Google Search Console "
-        "and Bing Webmaster, then select a verified property to run analysis."
+        "Connect Google Search Console or Bing Webmaster via the "
+        "**🔗 Connect Data Sources** panel at the top of the page, "
+        "then select a verified property to run analysis."
     )
 
-    # ── Auth block (credential UI + OAuth flow + cache pre-warm) ────────
-    auth_result = render_webmaster_auth()
-    if auth_result is None:
+    # ── Resolve DB + OAuth from top bar session state ─────────────────────
+    user_id = st.session_state.get("user_id")
+    if not user_id:
+        st.error("No user session. Please restart the app.")
         return
-    db, oauth, user_id = auth_result
+
+    db = st.session_state.get("_webmaster_db")
+    if db is None:
+        db = Database()
+        st.session_state["_webmaster_db"] = db
+
+    oauth = OAuthManager(db, user_id)
+
+    # ── Connection gate ───────────────────────────────────────────────────
+    google_connected = oauth.is_connected("google")
+    bing_connected = db.has_credential(user_id, "bing", "api_key")
+
+    if not google_connected and not bing_connected:
+        st.info(
+            "No data source connected. Open the **🔗 Connect Data Sources** "
+            "panel at the top of the page to connect Google Search Console "
+            "or Bing Webmaster."
+        )
+        return
 
     st.divider()
 
-    # ── Analysis gate: require at least one selected domain ─────────────
+    # ── Analysis gate: require at least one selected property ─────────────
     google_site = st.session_state.get("selected_google_site")
     bing_site = st.session_state.get("selected_bing_site")
 
     if not google_site and not bing_site:
-        st.info("Select a verified property from the dropdowns above to unlock analysis.")
+        st.info(
+            "Select a verified property from the **🔗 Connect Data Sources** "
+            "panel above to unlock analysis."
+        )
         return
 
-    # ── Analysis tabs ───────────────────────────────────────────────────
+    # ── Analysis tabs ─────────────────────────────────────────────────────
     tab_gsc, tab_bing_tab = st.tabs(["Google Search Console", "Bing Webmaster"])
 
     with tab_gsc:
         if google_site:
             _render_gsc_analysis_tab(db, oauth, user_id, google_site)
         else:
-            st.info("Connect Google Search Console above to begin.")
+            st.info("Connect Google Search Console in the panel above to begin.")
 
     with tab_bing_tab:
         if bing_site:
             _render_bing_analysis_tab(db, user_id, bing_site)
         else:
-            st.info("Connect Bing Webmaster above to begin.")
+            st.info("Connect Bing Webmaster in the panel above to begin.")
 
 
 # ===========================================================================
@@ -863,6 +893,7 @@ def _save_gsc_to_kb(processed: dict, ai_report: str, site_url: str, window_days:
         content=ai_report,
         dataframe=df if not df.empty else None,
         raw_json=json.dumps(processed, indent=2, default=str),
+        project_slug=st.session_state.get("project_slug", ""),
     )
     st.success(f"Saved to Knowledge Base: `{filename}` (.md + .csv + .json)")
 
@@ -894,5 +925,6 @@ def _save_bing_to_kb(strategy: dict, report: dict, ai_report: str, site_url: str
         content=ai_report,
         dataframe=df if not df.empty else None,
         raw_json=json.dumps({"report": report, "strategy": strategy}, indent=2, default=str),
+        project_slug=st.session_state.get("project_slug", ""),
     )
     st.success(f"Saved to Knowledge Base: `{filename}` (.md + .csv + .json)")

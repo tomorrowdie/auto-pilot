@@ -157,6 +157,22 @@ class Database:
         )
         self.conn.commit()
 
+    def rename_project_label(self, project_id: int, new_label: str) -> None:
+        """Update the display label of a project by its primary key id."""
+        self.conn.execute(
+            "UPDATE projects SET label = ?, site_url = ? WHERE id = ?",
+            (new_label, new_label, project_id),
+        )
+        self.conn.commit()
+
+    def delete_project_by_id(self, project_id: int) -> None:
+        """Hard-delete a project row by its primary key id."""
+        self.conn.execute(
+            "DELETE FROM projects WHERE id = ?",
+            (project_id,),
+        )
+        self.conn.commit()
+
     # ── OAuth State (CSRF) ──────────────────────────────────────────────
 
     def save_oauth_state(self, state: str, user_id: str, provider: str):

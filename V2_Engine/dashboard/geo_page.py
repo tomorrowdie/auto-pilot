@@ -863,6 +863,7 @@ def _render_writer_engine(book: dict | None) -> None:
                         filename=_fname_base,
                         content=body_text,
                         dataframe=_meta_df,
+                        project_slug=st.session_state.get("project_slug", ""),
                     )
                     st.session_state["last_saved_article"] = _saved
                     st.rerun()
