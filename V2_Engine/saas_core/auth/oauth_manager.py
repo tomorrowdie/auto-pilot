@@ -85,11 +85,9 @@ class OAuthManager:
         """
         Generate the Google OAuth authorization URL.
         Stores a CSRF state token in the DB.
-        Persists PKCE code_verifier to Streamlit session_state so it survives
-        the redirect round-trip (avoids invalid_grant: missing code verifier).
+        Persists the PKCE code_verifier to a temp file so it survives the
+        external OAuth redirect (session_state is reset on cross-domain hops).
         """
-        import streamlit as st
-
         flow = self._google_flow(redirect_uri)
         auth_url, state = flow.authorization_url(
             access_type="offline",
@@ -98,10 +96,12 @@ class OAuthManager:
         )
         self.db.save_oauth_state(state, self.user_id, "google")
 
-        # Persist PKCE verifier if the flow generated one
+        # Persist PKCE verifier to disk so the callback can retrieve it
         if hasattr(flow, "code_verifier") and flow.code_verifier:
-            st.session_state["google_oauth_code_verifier"] = flow.code_verifier
-            logger.debug("PKCE code_verifier saved to session_state")
+            import json
+            with open("oauth_verifier.json", "w") as _f:
+                json.dump({"verifier": flow.code_verifier}, _f)
+            logger.debug("PKCE code_verifier written to oauth_verifier.json")
 
         return auth_url
 
@@ -128,12 +128,20 @@ class OAuthManager:
 
         flow = self._google_flow()
 
-        # Restore PKCE code_verifier saved during get_google_auth_url (if any)
-        import streamlit as st
-        _verifier = st.session_state.pop("google_oauth_code_verifier", None)
-        if _verifier:
-            flow.code_verifier = _verifier
-            logger.debug("PKCE code_verifier restored from session_state")
+        # Restore PKCE code_verifier from temp file (session_state is wiped
+        # by the external redirect on Zeabur, so disk is the only safe store)
+        import json as _json
+        _verifier_path = "oauth_verifier.json"
+        if os.path.exists(_verifier_path):
+            try:
+                with open(_verifier_path, "r") as _f:
+                    _data = _json.load(_f)
+                flow.code_verifier = _data.get("verifier")
+                logger.debug("PKCE code_verifier restored from oauth_verifier.json")
+            except Exception as _e:
+                logger.warning("Failed to read oauth_verifier.json: %s", _e)
+            finally:
+                os.remove(_verifier_path)   # consume once — prevent stale reuse
 
         flow.fetch_token(authorization_response=full_callback_url)
         credentials = flow.credentials

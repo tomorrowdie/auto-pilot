@@ -255,17 +255,18 @@ def _render_google_section(db, oauth, user_id: str):
             st.session_state.pop("selected_google_site", None)
             st.rerun()
 
-    # ── Not connected: show Sign In button ───────────────────────────────
+    # ── Not connected: show Sign In link button ───────────────────────────
     else:
         st.warning("Not connected")
-        if st.button("Sign in with Google", key="cn_google", type="primary"):
-            try:
-                # Pass _REDIRECT_BASE explicitly so auth URL and callback
-                # flow both use the same URI (fixes token exchange mismatch).
-                auth_url = oauth.get_google_auth_url(redirect_uri=_REDIRECT_BASE)
-                st.markdown(f"[Authorize Google Search Console]({auth_url})")
-            except Exception as e:
-                st.error(f"Failed to generate auth URL: {e}")
+        try:
+            # Generate auth URL once at render time — pass _REDIRECT_BASE so
+            # auth URL and callback both use the same URI.
+            auth_url = oauth.get_google_auth_url(redirect_uri=_REDIRECT_BASE)
+            # st.link_button redirects immediately without triggering a rerun,
+            # which prevents session_state (and the PKCE verifier) from being wiped.
+            st.link_button("Sign in with Google", auth_url, type="primary")
+        except Exception as e:
+            st.error(f"Failed to generate auth URL: {e}")
 
 
 # ===========================================================================
