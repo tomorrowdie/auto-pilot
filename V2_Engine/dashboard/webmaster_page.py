@@ -204,9 +204,11 @@ def _render_google_section(db, oauth, user_id: str):
                         g_id.strip(), secret_to_save,
                         redirect_uri=_REDIRECT_BASE,   # ← persisted to DB
                     )
-                    # Immediately reflect the new Client ID in session_state and
-                    # bust the site cache so the dropdowns refresh on rerun.
-                    st.session_state["wm_google_client_id"] = g_id.strip()
+                    # Bust the site cache — the widget already owns
+                    # wm_google_client_id so we must NOT write it here
+                    # (Streamlit raises StreamlitAPIException if you modify
+                    # a widget-bound key after the widget is instantiated).
+                    # st.rerun() preserves the widget's current value automatically.
                     st.session_state.pop("google_sites", None)
                     st.session_state.pop("google_sites_debug", None)
                     st.toast("Google credentials saved.", icon="✅")
