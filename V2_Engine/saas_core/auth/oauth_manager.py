@@ -85,7 +85,11 @@ class OAuthManager:
         """
         Generate the Google OAuth authorization URL.
         Stores a CSRF state token in the DB.
+        Persists PKCE code_verifier to Streamlit session_state so it survives
+        the redirect round-trip (avoids invalid_grant: missing code verifier).
         """
+        import streamlit as st
+
         flow = self._google_flow(redirect_uri)
         auth_url, state = flow.authorization_url(
             access_type="offline",
@@ -93,6 +97,12 @@ class OAuthManager:
             prompt="consent",
         )
         self.db.save_oauth_state(state, self.user_id, "google")
+
+        # Persist PKCE verifier if the flow generated one
+        if hasattr(flow, "code_verifier") and flow.code_verifier:
+            st.session_state["google_oauth_code_verifier"] = flow.code_verifier
+            logger.debug("PKCE code_verifier saved to session_state")
+
         return auth_url
 
     def callback_google(self, full_callback_url: str) -> dict:
@@ -117,6 +127,14 @@ class OAuthManager:
         user_id = state_data["user_id"]
 
         flow = self._google_flow()
+
+        # Restore PKCE code_verifier saved during get_google_auth_url (if any)
+        import streamlit as st
+        _verifier = st.session_state.pop("google_oauth_code_verifier", None)
+        if _verifier:
+            flow.code_verifier = _verifier
+            logger.debug("PKCE code_verifier restored from session_state")
+
         flow.fetch_token(authorization_response=full_callback_url)
         credentials = flow.credentials
 

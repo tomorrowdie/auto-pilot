@@ -204,6 +204,11 @@ def _render_google_section(db, oauth, user_id: str):
                         g_id.strip(), secret_to_save,
                         redirect_uri=_REDIRECT_BASE,   # ← persisted to DB
                     )
+                    # Immediately reflect the new Client ID in session_state and
+                    # bust the site cache so the dropdowns refresh on rerun.
+                    st.session_state["wm_google_client_id"] = g_id.strip()
+                    st.session_state.pop("google_sites", None)
+                    st.session_state.pop("google_sites_debug", None)
                     st.toast("Google credentials saved.", icon="✅")
                     st.rerun()
 
@@ -293,7 +298,8 @@ def _render_bing_section(db, user_id: str):
                     user_id, "bing", "api_key",
                     {"api_key": bing_key.strip()},
                 )
-                st.session_state.pop("bing_sites", None)   # force re-fetch
+                st.session_state.pop("bing_sites", None)       # force re-fetch
+                st.session_state.pop("bing_fetch_error", None) # clear stale error
                 st.toast("Bing API key saved.", icon="✅")
                 st.rerun()
             elif has_key:
