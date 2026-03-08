@@ -63,7 +63,7 @@ class OAuthManager:
 
     def _google_flow(self, redirect_uri: str | None = None) -> GoogleFlow:
         """Create a Google OAuth flow using DB-stored credentials."""
-        creds = self._get_creds("google")
+        creds = self._get_creds("gsc_oauth")
         _redirect = redirect_uri or creds.get("redirect_uri") or _DEFAULT_REDIRECT_URI
         client_config = {
             "web": {
@@ -94,7 +94,7 @@ class OAuthManager:
             include_granted_scopes="true",
             prompt="consent",
         )
-        self.db.save_oauth_state(state, self.user_id, "google")
+        self.db.save_oauth_state(state, self.user_id, "gsc_oauth")
 
         # Persist PKCE verifier to disk so the callback can retrieve it
         if hasattr(flow, "code_verifier") and flow.code_verifier:
@@ -110,7 +110,7 @@ class OAuthManager:
         Process the Google OAuth callback.
         Exchanges the auth code for tokens and saves them.
 
-        Returns: {"user_id": ..., "provider": "google"} on success.
+        Returns: {"user_id": ..., "provider": "gsc_oauth"} on success.
         Raises ValueError on CSRF mismatch or exchange failure.
         """
         parsed = urllib.parse.urlparse(full_callback_url)
@@ -148,7 +148,7 @@ class OAuthManager:
 
         self.db.save_token(
             user_id=user_id,
-            provider="google",
+            provider="gsc_oauth",
             access_token=credentials.token,
             refresh_token=credentials.refresh_token or "",
             expires_in=int((credentials.expiry.timestamp() - time.time())) if credentials.expiry else 3600,
@@ -157,7 +157,7 @@ class OAuthManager:
 
         self.db.upsert_user(user_id)
         logger.info("Google OAuth completed for user %s", user_id)
-        return {"user_id": user_id, "provider": "google"}
+        return {"user_id": user_id, "provider": "gsc_oauth"}
 
     def google_get_credentials(self):
         """
@@ -166,11 +166,11 @@ class OAuthManager:
         """
         from google.oauth2.credentials import Credentials
 
-        token_data = self.db.get_token(self.user_id, "google")
+        token_data = self.db.get_token(self.user_id, "gsc_oauth")
         if not token_data:
             return None
 
-        creds_db = self._get_creds("google")
+        creds_db = self._get_creds("gsc_oauth")
 
         creds = Credentials(
             token=token_data["access_token"],
@@ -181,11 +181,11 @@ class OAuthManager:
             scopes=_GOOGLE_SCOPES,
         )
 
-        if self.db.token_is_expired(self.user_id, "google"):
+        if self.db.token_is_expired(self.user_id, "gsc_oauth"):
             from google.auth.transport.requests import Request
             creds.refresh(Request())
             expires_in = int((creds.expiry.timestamp() - time.time())) if creds.expiry else 3600
-            self.db.update_access_token(self.user_id, "google", creds.token, expires_in)
+            self.db.update_access_token(self.user_id, "gsc_oauth", creds.token, expires_in)
             logger.info("Google token refreshed for user %s", self.user_id)
 
         return creds
@@ -319,7 +319,7 @@ class OAuthManager:
         if not self.db.token_is_expired(self.user_id, provider):
             return True
 
-        if provider == "google":
+        if provider == "gsc_oauth":
             creds = self.google_get_credentials()
             return creds is not None
         elif provider == "bing":

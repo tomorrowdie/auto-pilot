@@ -3,7 +3,7 @@ Reviews Dashboard — Source 2 Review Analysis (Happy/Defect) UI.
 
 Renders the review analysis interface:
     - File Uploader (Sorftime Excel)
-    - AI Analysis trigger (Gemini via API Key Vault)
+    - AI Analysis trigger (via API Key Vault — any BYOK provider)
     - Happy DNA tab (Brand DNA cards)
     - Defect Tracker tab (bar chart + table)
     - Raw Data tab
@@ -28,6 +28,7 @@ from V2_Engine.processors.source_2_reviews.reviews_analyzer import (
 )
 from V2_Engine.knowledge_base.manager import KnowledgeManager
 from V2_Engine.saas_core.auth import auth_manager
+from byok_llm.models import PROVIDER_BY_ID
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -104,30 +105,42 @@ def render_reviews_page():
     st.divider()
 
     user_id = st.session_state.get("user_id", "dev_admin")
+    st.info(
+        "⚠️ **Recommendation:** Our algorithms and benchmarks for this module are deeply "
+        "optimized for Google Search Engine logic. We strongly recommend selecting a "
+        "**Gemini** model (via Google or OpenRouter) for the best results.\n\n"
+        "⚠️ **推荐：** 本模块的算法与基准测试已针对 Google 搜索引擎逻辑进行了深度优化。"
+        "我们强烈建议选择 **Gemini** 模型（通过 Google 或 OpenRouter）以获得最佳效果。"
+    )
     rev_provider, rev_model = auth_manager.render_tab_model_selector(
         user_id, tab_key="reviews", label="Analysis Model",
     )
     rev_api_key = auth_manager.get_api_key(user_id, rev_provider)
 
-    if not rev_api_key:
+    # Ollama and any future no-key provider are always ready to run
+    _rev_needs_key = PROVIDER_BY_ID.get(rev_provider, {}).get("requires_key", True)
+    _can_run = bool(rev_api_key) or not _rev_needs_key
+
+    if _can_run:
+        st.caption(f"Connected: **{rev_provider} \u2014 {rev_model}**")
+    else:
         st.warning(
             "\u26a0\ufe0f No API key stored for the selected provider. "
             "Add one via the **API Keys** sidebar."
         )
-    else:
-        st.caption(f"Connected: **{rev_provider} \u2014 {rev_model}**")
 
-        if st.button(
-            "\u2728 Analyze Reviews with AI",
-            type="primary",
-            use_container_width=True,
-            key="btn_analyze_reviews",
+    if st.button(
+        "\u2728 Analyze with AI",
+        type="primary",
+        disabled=not _can_run,
+        use_container_width=True,
+        key="btn_analyze_reviews",
+    ):
+        rev_config = {"key": rev_api_key, "model": rev_model, "provider": rev_provider}
+        with st.spinner(
+            "AI is reading reviews... (This may take 15-30s per ASIN)"
         ):
-            rev_config = {"key": rev_api_key, "model": rev_model, "provider": rev_provider}
-            with st.spinner(
-                "AI is reading reviews... (This may take 15-30s per ASIN)"
-            ):
-                results = analyze_reviews(df, rev_config)
+            results = analyze_reviews(df, rev_config)
 
             # Store in session state so it survives refresh
             st.session_state["review_analysis_results"] = results
@@ -265,7 +278,7 @@ def render_reviews_page():
         else:
             st.info(
                 "No Happy DNA results yet. "
-                "Click **Analyze Reviews with Gemini** above."
+                "Click **Analyze with AI** above."
             )
 
     # ----- Tab 2: Defect Tracker -----
@@ -345,7 +358,7 @@ def render_reviews_page():
             else:
                 st.info(
                     "No Defect Tracker results yet. "
-                    "Click **Analyze Reviews with Gemini** above."
+                    "Click **Analyze with AI** above."
                 )
 
     # ----- Tab 3: Raw Data -----

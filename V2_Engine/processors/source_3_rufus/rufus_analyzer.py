@@ -25,9 +25,8 @@ import json
 import re
 import time
 
-from langchain_core.messages import HumanMessage
-
-from V2_Engine.saas_core.auth.registry import build_llm
+from byok_llm import LLMRouter
+from V2_Engine.saas_core.utils.json_helpers import parse_llm_json
 
 
 # ---------------------------------------------------------------------------
@@ -612,8 +611,11 @@ def extract_tags(text: str) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# LLM Call via V5 Registry (LangChain)
+# LLM Call via byok_llm router
 # ---------------------------------------------------------------------------
+_router = LLMRouter()
+
+
 def _call_llm(
     prompt: str,
     provider: str,
@@ -622,11 +624,11 @@ def _call_llm(
     json_mode: bool = True,
 ) -> str:
     """
-    Call any supported LLM provider via the V5 registry.
+    Call any supported LLM provider via the byok_llm router.
 
     Args:
         prompt:    The full prompt text (already formatted with context).
-        provider:  Registry key (e.g. 'google', 'openai', 'anthropic').
+        provider:  Provider ID (e.g. 'google', 'openai', 'anthropic').
         api_key:   Provider API key.
         model:     Model name.
         json_mode: Unused — prompts instruct JSON format directly.
@@ -634,13 +636,14 @@ def _call_llm(
 
     Returns:
         Raw text response from the model.
-
-    Raises:
-        RuntimeError on API failure.
     """
-    llm = build_llm(provider, api_key, model, temperature=0.2)
-    response = llm.invoke([HumanMessage(content=prompt)])
-    return response.content
+    return _router.call(
+        prompt=prompt,
+        provider=provider,
+        api_key=api_key,
+        model=model,
+        temperature=0.2,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -648,86 +651,13 @@ def _call_llm(
 # ---------------------------------------------------------------------------
 def _repair_and_parse_json(raw_text: str) -> dict:
     """
-    6-stage hybrid parser for messy LLM output.
-
-    Stage 1: Strip markdown fences.
-    Stage 2: Fix trailing commas.
-    Stage 3: json.loads (standard parse).
-    Stage 4: json.loads with brute force brace wrap.
-    Stage 5: ast.literal_eval with JSON→Python token conversion.
-    Stage 6: Safe skeleton fallback (pipeline never crashes).
+    Delegates to shared 7-stage JSON parser (adds truncation repair over
+    the old local 6-stage implementation). Never raises.
     """
-    _SAFE_FALLBACK = {"auditor_report": {"trap_questions": []}}
-
-    if not raw_text or not raw_text.strip():
-        return {"_raw": "(empty response)", **_SAFE_FALLBACK}
-
-    cleaned = raw_text.strip()
-
-    # Stage 1: Strip markdown fences
-    cleaned = re.sub(r"^```json\s*", "", cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r"^```\s*", "", cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r"```\s*$", "", cleaned)
-    cleaned = cleaned.strip()
-
-    # Stage 2: Fix trailing commas (common LLM mistake)
-    fixed = re.sub(r",\s*([}\]])", r"\1", cleaned)
-
-    # Stage 3: Try direct json.loads (handles valid JSON)
-    for text in (fixed, cleaned):
-        try:
-            return json.loads(text)
-        except (json.JSONDecodeError, ValueError):
-            pass
-
-    # Stage 4: Brute Force Wrap (fixes missing outer braces)
-    print("[Rufus Analyzer] JSON repair: attempting brute force wrap...")
-    for text in (fixed, cleaned):
-        try:
-            return json.loads("{" + text + "}")
-        except (json.JSONDecodeError, ValueError):
-            pass
-
-    # Stage 5: Python-Native Pivot (ast.literal_eval)
-    # Pre-process: convert JSON tokens → Python literals to prevent NameError
-    print("[Rufus Analyzer] JSON repair: attempting ast.literal_eval...")
-    for text in (fixed, cleaned):
-        pythonized = text
-        # Convert JSON booleans/null → Python (word-boundary safe)
-        pythonized = re.sub(r'\btrue\b', 'True', pythonized)
-        pythonized = re.sub(r'\bfalse\b', 'False', pythonized)
-        pythonized = re.sub(r'\bnull\b', 'None', pythonized)
-        # Try direct parse
-        try:
-            result = ast.literal_eval(pythonized)
-            if isinstance(result, dict):
-                return result
-        except (ValueError, SyntaxError):
-            pass
-        # Try with brace wrap
-        try:
-            result = ast.literal_eval("{" + pythonized + "}")
-            if isinstance(result, dict):
-                return result
-        except (ValueError, SyntaxError):
-            pass
-
-    # Stage 5b: Last resort — extract outermost { ... } substring
-    first_brace = cleaned.find("{")
-    last_brace = cleaned.rfind("}")
-    if first_brace != -1 and last_brace > first_brace:
-        extracted = cleaned[first_brace:last_brace + 1]
-        try:
-            return json.loads(extracted)
-        except (json.JSONDecodeError, ValueError):
-            pass
-
-    # Stage 6: Fallback — return raw text with safe skeleton
-    print(
-        f"[Rufus Analyzer] JSON repair: all 6 stages failed. "
-        f"Returning raw text ({len(cleaned)} chars)."
+    return parse_llm_json(
+        raw_text,
+        fallback={"auditor_report": {"trap_questions": []}},
     )
-    return {"_raw": cleaned[:1000], **_SAFE_FALLBACK}
 
 
 # ---------------------------------------------------------------------------

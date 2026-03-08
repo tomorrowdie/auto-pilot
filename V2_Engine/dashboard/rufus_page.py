@@ -26,6 +26,7 @@ from V2_Engine.processors.source_3_rufus.rufus_analyzer import (
 )
 from V2_Engine.knowledge_base.manager import KnowledgeManager
 from V2_Engine.saas_core.auth import auth_manager
+from byok_llm.models import PROVIDER_BY_ID
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -120,8 +121,12 @@ def render_rufus_page():
     st.title("Source 3: Rufus Defense (Adversarial Simulation)")
 
     # --- 1. Auth Check (V5 Vault) ---
+    # Allow through: keyed providers with stored keys, OR no-key providers (Ollama).
+    # render_tab_model_selector always includes Ollama, so the page is never empty.
     user_id = st.session_state.get("user_id", "dev_admin")
-    if not auth_manager.get_active_providers(user_id):
+    _active_keyed = auth_manager.get_active_providers(user_id)
+    _no_key_providers = {p["id"] for p in PROVIDER_BY_ID.values() if not p.get("requires_key", True)}
+    if not (_active_keyed or _no_key_providers):
         st.warning(
             "**System Locked:** Add an API Key in the **API Keys** sidebar "
             "to enable Rufus Analysis."
@@ -232,6 +237,13 @@ def render_rufus_page():
     # --- 3. Action Section ---
     st.divider()
 
+    st.info(
+        "⚠️ **Recommendation:** Our algorithms and benchmarks for this module are deeply "
+        "optimized for Google Search Engine logic. We strongly recommend selecting a "
+        "**Gemini** model (via Google or OpenRouter) for the best results.\n\n"
+        "⚠️ **推荐：** 本模块的算法与基准测试已针对 Google 搜索引擎逻辑进行了深度优化。"
+        "我们强烈建议选择 **Gemini** 模型（通过 Google 或 OpenRouter）以获得最佳效果。"
+    )
     col_m1, col_m2 = st.columns(2)
     with col_m1:
         agent_provider, agent_model = auth_manager.render_tab_model_selector(

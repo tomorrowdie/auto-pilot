@@ -20,9 +20,9 @@ import re
 import time
 
 import pandas as pd
-from langchain_core.messages import HumanMessage, SystemMessage
 
-from V2_Engine.saas_core.auth.registry import build_llm
+from byok_llm import LLMRouter
+from V2_Engine.saas_core.utils.json_helpers import parse_llm_json
 from V2_Engine.processors.source_2_reviews.prompts import (
     HAPPY_SYSTEM_PROMPT,
     HAPPY_USER_PROMPT,
@@ -73,8 +73,11 @@ def _prepare_batch(df: pd.DataFrame) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Step C: LLM call via V5 registry (LangChain)
+# Step C: LLM call via byok_llm router
 # ---------------------------------------------------------------------------
+_router = LLMRouter()
+
+
 def _call_llm(
     system_prompt: str,
     user_prompt: str,
@@ -83,28 +86,26 @@ def _call_llm(
     model: str,
 ) -> str:
     """
-    Call any supported LLM provider via the V5 registry.
+    Call any supported LLM provider via the byok_llm router.
 
     Args:
         system_prompt: The system instruction text.
         user_prompt:   The user message (contains review data).
-        provider:      Registry key (e.g. 'google', 'openai', 'anthropic').
+        provider:      Provider ID (e.g. 'google', 'openai', 'anthropic').
         api_key:       Provider API key.
         model:         Model name.
 
     Returns:
         Raw text response from the model.
-
-    Raises:
-        RuntimeError on API failure.
     """
-    llm = build_llm(provider, api_key, model, temperature=0.2)
-    messages = [
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=user_prompt),
-    ]
-    response = llm.invoke(messages)
-    return response.content
+    return _router.call(
+        prompt=user_prompt,
+        system=system_prompt,
+        provider=provider,
+        api_key=api_key,
+        model=model,
+        temperature=0.2,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -114,16 +115,11 @@ def _parse_llm_json(raw_text: str) -> dict:
     """
     Parse the LLM response into a Python dict.
 
-    Strips markdown code fences if present, then json.loads().
+    Delegates to the shared 7-stage robust parser (json_helpers.parse_llm_json)
+    which handles markdown fences, trailing commas, missing braces, boolean
+    token case mismatches, and truncated output.  Never raises.
     """
-    cleaned = raw_text.strip()
-
-    # Strip ```json ... ``` fences
-    cleaned = re.sub(r"^```json\s*", "", cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r"```\s*$", "", cleaned)
-    cleaned = cleaned.strip()
-
-    return json.loads(cleaned)
+    return parse_llm_json(raw_text, fallback={})
 
 
 # ---------------------------------------------------------------------------

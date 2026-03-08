@@ -10,8 +10,8 @@ Each stage injects the previous stage's output invisibly as context.
 Prompt templates are loaded from V2_Engine/prompts/active/seo_prompt_part{0,1,2}.md.
 If the files are empty, built-in stub prompts are used automatically.
 
-LLM caller is modular — PM will plug in Gemini / Qwen API key later.
-Until then, model="mock" returns realistic demo content instantly.
+LLM caller uses byok_llm.LLMRouter — provider is inferred from model prefix.
+model="mock" (or empty api_key) returns realistic demo content instantly.
 """
 
 from __future__ import annotations
@@ -20,6 +20,8 @@ import json
 import os
 import re
 import time
+
+from byok_llm import LLMRouter
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -476,59 +478,58 @@ def md_to_html(md_text: str) -> str:
         return f"<article>\n{html}\n</article>"
 
 
+_router = LLMRouter()
+
+# Map model-name prefixes to byok_llm provider IDs
+_MODEL_PREFIX_TO_PROVIDER: dict[str, str] = {
+    "gemini":    "google",
+    "qwen":      "qwen",
+    "gpt":       "openai",
+    "o1":        "openai",
+    "o3":        "openai",
+    "o4":        "openai",
+    "claude":    "anthropic",
+    "deepseek":  "deepseek",
+    "llama":     "ollama",
+    "mistral":   "ollama",
+}
+
+
+def _infer_provider(model: str) -> str:
+    """
+    Infer the byok_llm provider ID from the model name.
+    OpenRouter models use 'org/model' format (e.g. 'anthropic/claude-sonnet-4-5').
+    Direct provider models use plain names (e.g. 'gemini-2.5-flash-preview-05-20').
+    """
+    # OpenRouter models always contain a slash
+    if "/" in model:
+        return "openrouter"
+    model_lower = model.lower()
+    for prefix, provider in _MODEL_PREFIX_TO_PROVIDER.items():
+        if model_lower.startswith(prefix):
+            return provider
+    return "google"   # safe default for unknown models
+
+
 def _call_llm(prompt: str, api_key: str, model: str, system: str = "") -> str:
     """
-    Modular LLM caller.
+    Unified LLM caller via byok_llm router.
     - api_key empty OR model='mock' → returns the hydrated prompt (for UI testing)
-    - model starts with 'gemini'     → Gemini via google-genai SDK
-    - model starts with 'qwen'       → Qwen via OpenAI-compatible endpoint
+    - Provider inferred automatically from model name prefix
     """
     if not api_key or model == "mock":
         time.sleep(1.2)   # simulate network latency
         return prompt     # return the hydrated prompt so the user can inspect it
 
-    if model.startswith("gemini"):
-        return _call_gemini(prompt, api_key, model, system)
-
-    if model.startswith("qwen"):
-        return _call_qwen(prompt, api_key, model, system)
-
-    return f"[Unknown model '{model}' — check LLM settings]"
-
-
-def _call_gemini(prompt: str, api_key: str, model: str, system: str) -> str:
-    """Gemini via google-genai SDK. Uses the exact model string passed in."""
-    try:
-        from google import genai                    # type: ignore
-        from google.genai import types              # type: ignore
-        client = genai.Client(api_key=api_key)
-        cfg = types.GenerateContentConfig(system_instruction=system) if system else None
-        response = client.models.generate_content(
-            model=model,
-            contents=prompt,
-            config=cfg,
-        )
-        return response.text
-    except Exception as exc:
-        return f"[Gemini error: {exc}]"
-
-
-def _call_qwen(prompt: str, api_key: str, model: str, system: str) -> str:
-    """Qwen Max via Alibaba DashScope (OpenAI-compatible endpoint)."""
-    try:
-        from openai import OpenAI  # type: ignore
-        client = OpenAI(
-            api_key=api_key,
-            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-        )
-        messages: list[dict] = []
-        if system:
-            messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
-        resp = client.chat.completions.create(model="qwen-max", messages=messages)
-        return resp.choices[0].message.content
-    except Exception as exc:
-        return f"[Qwen error: {exc}]"
+    provider = _infer_provider(model)
+    return _router.call(
+        prompt=prompt,
+        provider=provider,
+        api_key=api_key,
+        model=model,
+        system=system or None,
+        temperature=0.7,
+    )
 
 
 # ---------------------------------------------------------------------------

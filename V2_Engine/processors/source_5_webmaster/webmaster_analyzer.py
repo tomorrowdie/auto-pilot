@@ -3,7 +3,7 @@ Source 5 Webmaster — LLM Analyzer
 
 Thin wrapper that:
 1. Fills the appropriate prompt from webmaster_prompts.py
-2. Calls the LLM via build_llm() (the V5 registry)
+2. Calls the LLM via byok_llm.LLMRouter
 3. Returns structured or raw text output
 
 Public API:
@@ -22,8 +22,8 @@ import json
 import logging
 import re
 
+from byok_llm import LLMRouter
 from V2_Engine.processors.source_5_webmaster.webmaster_prompts import fill_prompt
-from V2_Engine.saas_core.auth.registry import build_llm
 
 logger = logging.getLogger(__name__)
 
@@ -81,17 +81,18 @@ def _repair_json(raw: str) -> list | dict | None:
 # ---------------------------------------------------------------------------
 # LLM invocation helper
 # ---------------------------------------------------------------------------
+_router = LLMRouter()
+
 
 def _call_llm(provider: str, api_key: str, model: str, prompt: str) -> str:
-    """Build LLM and invoke with a single human message. Returns text string."""
-    try:
-        from langchain_core.messages import HumanMessage
-    except ImportError:
-        raise ImportError("pip install langchain-core")
-
-    llm = build_llm(provider=provider, api_key=api_key, model=model, temperature=0.7)
-    response = llm.invoke([HumanMessage(content=prompt)])
-    return response.content if hasattr(response, "content") else str(response)
+    """Invoke LLM via byok_llm router. Returns text string."""
+    return _router.call(
+        prompt=prompt,
+        provider=provider,
+        api_key=api_key,
+        model=model,
+        temperature=0.7,
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 """
-SaaS Core — AuthManager Facade (V5)
+SaaS Core — AuthManager Facade (V6)
 
 The single interface for ALL credential operations across the app.
 
@@ -8,36 +8,38 @@ Key responsibilities:
   2. _validate_key              — Live HTTP ping before saving (Verify & Save)
   3. render_sidebar_key_manager — Compact Streamlit sidebar UI (global, keys only)
   4. render_tab_model_selector  — Per-tab model picker (contextual, in main panel)
-  5. get_llm                    — Delegates to registry.build_llm()
-  6. wipe_all                   — Security reset
+  5. wipe_all                   — Security reset
+
+LLM calls: handled by byok_llm.LLMRouter in each source analyzer.
+           AuthManager only stores/retrieves keys — it no longer builds LLM objects.
 
 V5 Split-Panel Rule:
   Sidebar  → render_sidebar_key_manager()   (security / global)
   Main     → render_tab_model_selector()    (task context / per-tab)
 """
 import logging
+
 import requests
 import streamlit as st
 
 from V2_Engine.saas_core.db.database import Database
-from V2_Engine.saas_core.auth.registry import (
-    PROVIDER_SPECS,
-    build_llm,
-    get_all_models_flat,
-)
+from byok_llm.models import PROVIDER_CATALOG, PROVIDER_BY_ID
 
 logger = logging.getLogger(__name__)
 
-# Providers that never need an API key
-_NO_KEY_PROVIDERS = {"local_ollama"}
+# Providers that never need an API key (derived from catalog — currently just ollama)
+_NO_KEY_PROVIDERS: set[str] = {
+    p["id"] for p in PROVIDER_CATALOG if not p["requires_key"]
+}
 
 # Live validation endpoints per provider
 _VALIDATE_URLS: dict[str, str] = {
-    "google":    "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}",
-    "openai":    "https://api.openai.com/v1/chat/completions",
-    "anthropic": "https://api.anthropic.com/v1/messages",
-    "deepseek":  "https://api.deepseek.com/v1/chat/completions",
-    "alibaba":   "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
+    "openrouter": "https://openrouter.ai/api/v1/chat/completions",
+    "google":     "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}",
+    "openai":     "https://api.openai.com/v1/chat/completions",
+    "anthropic":  "https://api.anthropic.com/v1/messages",
+    "deepseek":   "https://api.deepseek.com/v1/chat/completions",
+    "qwen":       "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
 }
 
 
@@ -72,17 +74,6 @@ class AuthManager:
                 msg = resp.json().get("error", {}).get("message", resp.text[:100])
                 return False, msg
 
-            elif provider == "openai":
-                resp = requests.post(
-                    _VALIDATE_URLS["openai"],
-                    headers={"Authorization": f"Bearer {key}"},
-                    json={"model": model, "messages": [{"role": "user", "content": "hi"}], "max_tokens": 1},
-                    timeout=10,
-                )
-                if resp.status_code == 200:
-                    return True, "Connected"
-                return False, resp.json().get("error", {}).get("message", resp.text[:100])
-
             elif provider == "anthropic":
                 resp = requests.post(
                     _VALIDATE_URLS["anthropic"],
@@ -98,19 +89,18 @@ class AuthManager:
                     return True, "Connected"
                 return False, resp.json().get("error", {}).get("message", resp.text[:100])
 
-            elif provider in ("deepseek", "alibaba"):
-                url = _VALIDATE_URLS[provider]
+            elif provider in ("openrouter", "openai", "deepseek", "qwen"):
                 resp = requests.post(
-                    url,
+                    _VALIDATE_URLS[provider],
                     headers={"Authorization": f"Bearer {key}"},
                     json={"model": model, "messages": [{"role": "user", "content": "hi"}], "max_tokens": 1},
                     timeout=10,
                 )
                 if resp.status_code == 200:
                     return True, "Connected"
-                return False, resp.text[:100]
+                return False, resp.json().get("error", {}).get("message", resp.text[:100])
 
-            elif provider == "local_ollama":
+            elif provider in _NO_KEY_PROVIDERS:
                 return True, "Local (no validation needed)"
 
             return True, "No validation endpoint"
@@ -137,8 +127,10 @@ class AuthManager:
         Validate key, then persist to vault.
         Returns (success, message).
         """
-        spec = PROVIDER_SPECS.get(provider, {})
-        resolved_model = model or spec.get("default_model", "")
+        spec = PROVIDER_BY_ID.get(provider, {})
+        models = spec.get("models", [])
+        default_model = models[0]["id"] if models else ""
+        resolved_model = model or default_model
 
         if provider not in _NO_KEY_PROVIDERS:
             ok, msg = self._validate_key(provider, key, resolved_model)
@@ -170,37 +162,6 @@ class AuthManager:
         return {r["provider"] for r in rows if r["credential_type"] == "api_key"}
 
     # ══════════════════════════════════════════════════════════════════
-    #  LLM FACTORY
-    # ══════════════════════════════════════════════════════════════════
-
-    def get_llm(
-        self,
-        user_id: str,
-        provider: str,
-        model: str | None = None,
-        api_key: str | None = None,
-        temperature: float = 0.7,
-        **kwargs,
-    ):
-        """
-        Fetch API key from vault (or use override) and return an LLM object.
-        Delegates to registry.build_llm().
-        """
-        key = api_key or self.get_api_key(user_id, provider)
-        if key is None and provider not in _NO_KEY_PROVIDERS:
-            raise ValueError(
-                f"No API key stored for provider '{provider}'. "
-                f"Save a key first via render_sidebar_key_manager()."
-            )
-        return build_llm(
-            provider=provider,
-            api_key=key or "local",
-            model=model,
-            temperature=temperature,
-            **kwargs,
-        )
-
-    # ══════════════════════════════════════════════════════════════════
     #  STREAMLIT UI — SIDEBAR  (Global Credentials)
     # ══════════════════════════════════════════════════════════════════
 
@@ -210,60 +171,69 @@ class AuthManager:
         Enforces Split-Panel Rule: sidebar handles CREDENTIALS only.
         """
         with st.expander("API Keys", expanded=False):
-            active = self.get_active_providers(user_id)
-
-            # ── Active connections summary ──
-            if active:
-                st.caption("**Stored Keys**")
-                for p in sorted(active):
-                    label = PROVIDER_SPECS.get(p, {}).get("label", p)
-                    col_label, col_del = st.columns([4, 1])
-                    with col_label:
-                        st.caption(f"OK  {label}")
-                    with col_del:
-                        if st.button("X", key=f"del_key_{p}", help=f"Remove {label}"):
-                            self.delete_api_key(user_id, p)
-                            st.rerun()
-                st.divider()
-
-            # ── Add / Edit key form ──
-            st.caption("**Add / Edit Key**")
-            provider_options = [k for k in PROVIDER_SPECS if k != "local_ollama"]
+            # ── Provider + model selectors ──
+            keyed = [p for p in PROVIDER_CATALOG if p["requires_key"]]
+            provider_ids = [p["id"] for p in keyed]
             provider = st.selectbox(
                 "Provider",
-                options=provider_options,
-                format_func=lambda k: PROVIDER_SPECS[k]["label"],
+                options=provider_ids,
+                format_func=lambda k: PROVIDER_BY_ID[k]["label"],
                 key="akm_provider_select",
             )
-            spec = PROVIDER_SPECS[provider]
-            model_options = spec.get("models", [])
+            spec = PROVIDER_BY_ID[provider]
+            model_ids    = [m["id"]    for m in spec.get("models", [])]
+            model_labels = {m["id"]: m["label"] for m in spec.get("models", [])}
             model = st.selectbox(
                 "Default Model",
-                options=model_options,
-                index=model_options.index(spec["default_model"]) if spec["default_model"] in model_options else 0,
+                options=model_ids,
+                format_func=lambda mid: model_labels.get(mid, mid),
                 key="akm_model_select",
             )
+
+            # ── Stored-key status for the currently selected provider ──
+            _current_key = self.get_api_key(user_id, provider)
+            _is_saved = bool(_current_key)
+            if _is_saved:
+                st.caption(f"✅ **{spec['label']}** key saved")
+            else:
+                st.caption(f"No key saved for **{spec['label']}** yet.")
+
+            # ── API key input — provider-scoped key so it resets on switch ──
+            key_url = spec.get("key_url")
+            placeholder = f"Paste your {spec['label']} API key"
             key_input = st.text_input(
                 "API Key",
                 type="password",
-                placeholder=f"{spec['env_var']} — validates on save",
-                key="akm_key_input",
+                value=_current_key or "",
+                placeholder=placeholder,
+                key=f"akm_{provider}_key_input",
             )
-            if st.button("Verify & Save", key="akm_save_btn", use_container_width=True):
-                if not key_input.strip():
-                    st.warning("Paste your API key first.")
-                else:
-                    with st.spinner("Validating..."):
-                        ok, msg = self.save_api_key(user_id, provider, key_input.strip(), model)
-                    if ok:
-                        st.success(f"Saved! {msg}")
-                        st.rerun()
+            if key_url:
+                st.caption(f"[Get API key ↗]({key_url})")
+
+            col_save, col_del = st.columns([3, 1])
+            with col_save:
+                if st.button("Verify & Save", key="akm_save_btn", use_container_width=True):
+                    if not key_input.strip():
+                        st.warning("Paste your API key first.")
                     else:
-                        st.error(f"Rejected: {msg}")
+                        with st.spinner("Validating..."):
+                            ok, msg = self.save_api_key(user_id, provider, key_input.strip(), model)
+                        if ok:
+                            st.success(f"Saved! {msg}")
+                            st.rerun()
+                        else:
+                            st.error(f"Rejected: {msg}")
+            with col_del:
+                if _is_saved:
+                    if st.button("Remove", key="akm_del_btn", use_container_width=True):
+                        self.delete_api_key(user_id, provider)
+                        st.toast(f"Removed {spec['label']} key", icon="🗑️")
+                        st.rerun()
 
             # ── Local Ollama (always available) ──
             st.divider()
-            st.caption("Local / Ollama — no key needed")
+            st.caption("Ollama (Local) — no key needed")
 
             # ── Security reset ──
             st.divider()
@@ -289,7 +259,7 @@ class AuthManager:
     ) -> tuple[str, str]:
         """
         Contextual model dropdown for a specific task/tab.
-        Only shows models for providers with stored keys (+ local_ollama always).
+        Only shows models for providers with stored keys (+ ollama always).
         Returns (provider_key, model_id).
 
         Args:
@@ -297,17 +267,35 @@ class AuthManager:
             tab_key:  Unique key per usage site (e.g. "rufus_audit", "review_analysis").
             label:    Display label above the dropdown.
         """
-        active = self.get_active_providers(user_id) | {"local_ollama"}
-        flat = get_all_models_flat(providers=active)
+        active = self.get_active_providers(user_id) | _NO_KEY_PROVIDERS
+
+        # Build flat list from PROVIDER_CATALOG for active providers only
+        flat: list[dict] = []
+        for pspec in PROVIDER_CATALOG:
+            pid = pspec["id"]
+            if pid not in active:
+                continue
+            plabel = pspec["label"]
+            for m in pspec["models"]:
+                flat.append({
+                    "provider": pid,
+                    "model":    m["id"],
+                    "label":    f"{plabel} — {m['label']}",
+                })
 
         if not flat:
             st.warning("No API keys stored. Add one in the API Keys sidebar.")
-            return "local_ollama", PROVIDER_SPECS["local_ollama"]["default_model"]
+            ollama_spec = PROVIDER_BY_ID.get("ollama", {})
+            fallback_model = (ollama_spec.get("models") or [{"id": "llama3"}])[0]["id"]
+            return "ollama", fallback_model
 
-        options = [f"{m['label']}" for m in flat]
-        # Determine default index — prefer google/gemini-2.5-flash if available
+        options = [m["label"] for m in flat]
+        # Prefer openrouter first, then google flash
         default_idx = 0
         for i, m in enumerate(flat):
+            if m["provider"] == "openrouter":
+                default_idx = i
+                break
             if m["provider"] == "google" and "flash" in m["model"]:
                 default_idx = i
                 break

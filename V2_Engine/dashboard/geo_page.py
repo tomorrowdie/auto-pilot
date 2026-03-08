@@ -666,14 +666,15 @@ def _render_writer_engine(book: dict | None) -> None:
         # ── LLM (wired from global API key vault) ────────────────────────
         from V2_Engine.saas_core.auth import auth_manager as _am
         _vault_uid = st.session_state.get("user_id", "dev_admin")
-        api_key    = _am.get_api_key(_vault_uid, "google") or ""
-        model      = "gemini-3.1-pro-preview" if api_key else "mock"
-        if api_key:
-            st.caption("LLM: Gemini 3.1 Pro ✓")
-        else:
+        _provider, model = _am.render_tab_model_selector(
+            _vault_uid, tab_key="geo_writer", label="LLM Model"
+        )
+        api_key = _am.get_api_key(_vault_uid, _provider) or ""
+        if not api_key:
+            model = "mock"
             st.warning(
-                "No Google API key found — running in mock preview mode.  \n"
-                "Add your Gemini key in the **API Keys** sidebar."
+                f"No API key stored for **{_provider}** — running in mock preview mode.  \n"
+                "Add your key in the **API Keys** sidebar."
             )
 
         # ── PROMPT INGREDIENTS ───────────────────────────────────────────

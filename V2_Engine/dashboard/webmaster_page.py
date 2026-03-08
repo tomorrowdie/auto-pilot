@@ -78,7 +78,7 @@ def render_webmaster_auth(db=None, oauth=None, user_id: str | None = None):
     # ── Pre-warm site caches on fresh session ────────────────────────────
     # On browser refresh session_state is cleared but DB credentials survive.
     # Re-fetch site lists silently so dropdowns appear immediately.
-    if oauth.is_connected("google") and "google_sites" not in st.session_state:
+    if oauth.is_connected("gsc_oauth") and "google_sites" not in st.session_state:
         st.session_state["google_sites"] = _fetch_gsc_sites_cached(oauth)
     _bing_cred = db.get_credential(user_id, "bing", "api_key")
     _bing_key_prewarm = (_bing_cred or {}).get("api_key", "")
@@ -127,7 +127,7 @@ def render_webmaster_page():
     oauth = OAuthManager(db, user_id)
 
     # ── Connection gate ───────────────────────────────────────────────────
-    google_connected = oauth.is_connected("google")
+    google_connected = oauth.is_connected("gsc_oauth")
     bing_connected = db.has_credential(user_id, "bing", "api_key")
 
     if not google_connected and not bing_connected:
@@ -176,7 +176,7 @@ def _render_google_section(db, oauth, user_id: str):
 
     st.subheader("Google Search Console")
 
-    has_creds = oauth.has_credentials("google")
+    has_creds = oauth.has_credentials("gsc_oauth")
 
     # ── Pre-populate Client ID from DB on fresh session load ─────────────
     # Re-tries whenever the key is missing OR empty (e.g. after a Zeabur restart
@@ -184,7 +184,7 @@ def _render_google_section(db, oauth, user_id: str):
     _saved_client_id = ""
     if has_creds:
         if not st.session_state.get("wm_google_client_id"):
-            _saved_creds = db.get_api_credentials(user_id, "google") or {}
+            _saved_creds = db.get_api_credentials(user_id, "gsc_oauth") or {}
             _saved_client_id = _saved_creds.get("client_id", "")
             if _saved_client_id:
                 st.session_state["wm_google_client_id"] = _saved_client_id
@@ -221,7 +221,7 @@ def _render_google_section(db, oauth, user_id: str):
                 if g_secret.strip():
                     secret_to_save = g_secret.strip()
                 elif has_creds:
-                    existing = db.get_api_credentials(user_id, "google") or {}
+                    existing = db.get_api_credentials(user_id, "gsc_oauth") or {}
                     secret_to_save = existing.get("client_secret", "")
                 else:
                     secret_to_save = ""
@@ -230,7 +230,7 @@ def _render_google_section(db, oauth, user_id: str):
                     st.warning("Client Secret is required for a new credential.")
                 else:
                     db.save_api_credentials(
-                        user_id, "google",
+                        user_id, "gsc_oauth",
                         g_id.strip(), secret_to_save,
                         redirect_uri=_REDIRECT_BASE,   # ← persisted to DB
                     )
@@ -245,12 +245,12 @@ def _render_google_section(db, oauth, user_id: str):
                     st.rerun()
 
     # ── Nothing to do without credentials ───────────────────────────────
-    if not oauth.has_credentials("google"):
+    if not oauth.has_credentials("gsc_oauth"):
         st.info("Enter your Google OAuth credentials above to enable sign-in.")
         return
 
     # ── Connected: show property dropdown ────────────────────────────────
-    if oauth.is_connected("google"):
+    if oauth.is_connected("gsc_oauth"):
         st.success("Connected")
 
         # Fetch and cache verified properties (avoid hitting API every render)
@@ -280,7 +280,7 @@ def _render_google_section(db, oauth, user_id: str):
                 st.rerun()
 
         if st.button("Disconnect Google", key="dc_google"):
-            oauth.disconnect("google")
+            oauth.disconnect("gsc_oauth")
             st.session_state.pop("google_sites", None)
             st.session_state.pop("selected_google_site", None)
             st.rerun()
@@ -344,6 +344,17 @@ def _render_bing_section(db, user_id: str):
     # ── Nothing to do without a key ──────────────────────────────────────
     if not has_key:
         st.info("Enter your Bing API key above to begin.")
+        return
+
+    # Guard: row exists but can't be decrypted (e.g. TOKEN_ENC_KEY rotated).
+    # Show a warning and prompt re-entry rather than silently passing an empty key.
+    _bing_cred_check = db.get_credential(user_id, "bing", "api_key")
+    if not _bing_cred_check or not _bing_cred_check.get("api_key", ""):
+        st.warning(
+            "Bing API key is stored but could not be read — "
+            "likely due to an encryption key change after app restart.  \n"
+            "Please re-enter your key above and click **Save Bing Credentials**."
+        )
         return
 
     st.success("API Key configured")
@@ -415,9 +426,9 @@ def _handle_oauth_callback(db, oauth, user_id: str):
         provider = state_data["provider"]
         callback_user = state_data["user_id"]
 
-        if provider == "google":
+        if provider == "gsc_oauth":
             # Re-save state so callback_google() can re-validate it internally
-            db.save_oauth_state(state, callback_user, "google")
+            db.save_oauth_state(state, callback_user, "gsc_oauth")
             # Reconstruct the exact redirect URI Google sent the user back to.
             # Must use _REDIRECT_BASE so it matches the auth URL that was generated.
             redirect_uri = f"{_REDIRECT_BASE}/?code={code}&state={state}"
@@ -568,7 +579,7 @@ def _render_gsc_analysis_tab(db, oauth, user_id: str, google_site: str):
                 # Auto-generate AI report immediately after fetch
                 low_traffic_now = is_low_traffic(processed)
                 api_key_now = auth_manager.get_api_key(user_id, provider)
-                if api_key_now or provider == "local_ollama":
+                if api_key_now or provider == "ollama":
                     if low_traffic_now:
                         suggestions = generate_content_suggestions(
                             processed, provider, api_key_now or "", model, google_site
@@ -682,7 +693,7 @@ def _render_gsc_analysis_tab(db, oauth, user_id: str, google_site: str):
     with t_ai:
         if st.button("Regenerate AI Report", key="gen_gsc_ai"):
             api_key = auth_manager.get_api_key(user_id, provider)
-            if not api_key and provider != "local_ollama":
+            if not api_key and provider != "ollama":
                 st.error(f"No API key stored for '{provider}'. Add it in the sidebar.")
             else:
                 with st.spinner("Regenerating AI report..."):
@@ -766,7 +777,7 @@ def _render_bing_analysis_tab(db, user_id: str, bing_site: str):
 
                 # Auto-generate AI report immediately after fetch
                 api_key_now = auth_manager.get_api_key(user_id, provider)
-                if api_key_now or provider == "local_ollama":
+                if api_key_now or provider == "ollama":
                     bing_ai_text = generate_bing_report(
                         strategy, provider, api_key_now or "", model, bing_site
                     )
@@ -839,7 +850,7 @@ def _render_bing_analysis_tab(db, user_id: str, bing_site: str):
     with t_ai:
         if st.button("Regenerate AI Report", key="gen_bing_ai"):
             api_key = auth_manager.get_api_key(user_id, provider)
-            if not api_key and provider != "local_ollama":
+            if not api_key and provider != "ollama":
                 st.error(f"No API key stored for '{provider}'. Add it in the sidebar.")
             else:
                 with st.spinner("Regenerating Bing AI report..."):
